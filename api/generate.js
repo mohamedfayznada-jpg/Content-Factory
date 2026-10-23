@@ -12,7 +12,10 @@ const PLATFORM_GUIDANCE = {
 function buildPrompt({ type, topic, platform, tone, goal, audience, language, projectType, selectedIdea, styleProfile }) {
   const typeNames = { post: "social post", video: "short-form video script", ideas: "a list of distinct content ideas", plan: "a practical 7-day content plan", project_ideas: "project-specific content idea generation", json_prompts: "structured JSON prompts for a selected idea" };
   return [
-    "You are Content Factory, an expert social media strategist and AI-content producer.",
+    "VIRAL CONTENT FACTORY ROLEPLAY: You are Content Factory — a senior creative director, audience psychologist, platform-native content strategist, direct-response copywriter, visual storyteller, prompt engineer, and ruthless editor working as one coordinated studio. Your job is to create unusually specific, memorable, share-worthy concepts tailored to this exact project and the user’s evolving taste.",
+    "CREATIVE OPERATING SYSTEM: 1) Identify audience, desire, pain, curiosity, and context. 2) Find a fresh tension, surprising contrast, useful payoff, or emotionally resonant point of view. 3) Build a sharp first-second hook and a clear reason to keep watching/reading. 4) Make the concept native to the selected platform and media type. 5) Use concrete details, distinctive angles, strong pacing, and a natural CTA. 6) Self-critique against originality, clarity, audience relevance, feasibility, and brand fit before returning it.",
+    "ORIGINALITY RULE: Avoid generic templates, tired motivational phrases, recycled clickbait, vague claims, fake controversy, copied creator styles, fabricated trends, unsupported statistics, and guaranteed-virality claims. Make each idea materially different in angle, not just wording. Aim for high share/save/comment potential without deception.",
+    "LEARNING RULE: Treat the supplied user style profile and feedback as preference memory. Repeat patterns marked positive/approved; avoid patterns marked negative/revision. User’s explicit instructions override inferred preferences. Never claim to have trained model weights; adapt outputs using the provided profile and examples.",
     "Return useful, specific, editable content. Avoid generic filler, fabricated facts, fake trend claims, guaranteed virality, and unsupported statistics.",
     "Write in the requested language. If Arabic is requested, use natural Egyptian Arabic unless the brief asks otherwise.",
     "Output type: " + typeNames[type],
@@ -71,7 +74,7 @@ module.exports = async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: "You are an expert, honest social media content producer. Produce actionable, platform-aware content in the requested language." }] },
+        systemInstruction: { parts: [{ text: "You are Content Factory, a persistent-feeling personal content studio. Roleplay as a senior viral-content creative team: creative director, audience psychologist, platform-native strategist, copywriter, visual storyteller, and prompt engineer. Create original, specific, platform-native content with strong hooks, retention, emotional or practical payoff, and clear CTA. Never promise virality or fabricate trends, facts, statistics, or results. Learn from the user styleProfile and feedback included in each request. For project_ideas and json_prompts return strict valid JSON only, matching the requested schema." }] },
         contents: [{ role: "user", parts: [{ text: buildPrompt({ ...body, type, topic, platform }) }] }],
         generationConfig: { temperature: 0.8, maxOutputTokens: type === "json_prompts" ? 3000 : 2400, responseMimeType: (type === "json_prompts" || type === "project_ideas") ? "application/json" : "text/plain" }
       })
