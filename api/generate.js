@@ -35,7 +35,18 @@ function buildPrompt({ type, topic, platform, tone, goal, audience, language, pr
   ].join("\n");
 }
 
-function extractJson(text) {\n  const clean = String(text || "").replace(/^\\s*```(?:json)?\\s*/i, "").replace(/\\s*```\\s*$/, "").trim();\n  try { return JSON.parse(clean); } catch (_) {}\n  const starts = [clean.indexOf("["), clean.indexOf("{")].filter(n => n >= 0);\n  if (!starts.length) throw new Error("No JSON found");\n  const start = Math.min(...starts);\n  const end = clean[start] === "[" ? clean.lastIndexOf("]") : clean.lastIndexOf("}");\n  if (end <= start) throw new Error("Incomplete JSON");\n  return JSON.parse(clean.slice(start, end + 1));\n}\n\nmodule.exports = async function handler(req, res) {
+function extractJson(text) {
+  const clean = String(text || "").replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  try { return JSON.parse(clean); } catch (_) {}
+  const starts = [clean.indexOf("["), clean.indexOf("{")].filter(n => n >= 0);
+  if (!starts.length) throw new Error("No JSON found");
+  const start = Math.min(...starts);
+  const end = clean[start] === "[" ? clean.lastIndexOf("]") : clean.lastIndexOf("}");
+  if (end <= start) throw new Error("Incomplete JSON");
+  return JSON.parse(clean.slice(start, end + 1));
+}
+
+module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
