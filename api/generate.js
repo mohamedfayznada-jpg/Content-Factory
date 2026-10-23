@@ -35,7 +35,7 @@ function buildPrompt({ type, topic, platform, tone, goal, audience, language, pr
   ].join("\n");
 }
 
-module.exports = async function handler(req, res) {
+function extractJson(text) {\n  const clean = String(text || "").replace(/^\\s*```(?:json)?\\s*/i, "").replace(/\\s*```\\s*$/, "").trim();\n  try { return JSON.parse(clean); } catch (_) {}\n  const starts = [clean.indexOf("["), clean.indexOf("{")].filter(n => n >= 0);\n  if (!starts.length) throw new Error("No JSON found");\n  const start = Math.min(...starts);\n  const end = clean[start] === "[" ? clean.lastIndexOf("]") : clean.lastIndexOf("}");\n  if (end <= start) throw new Error("Incomplete JSON");\n  return JSON.parse(clean.slice(start, end + 1));\n}\n\nmodule.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
@@ -75,7 +75,7 @@ module.exports = async function handler(req, res) {
     }
     const text = (data.candidates || []).flatMap(c => c.content && c.content.parts ? c.content.parts : []).map(p => p.text || "").join("\n").trim();
     if (!text) return res.status(502).json({ error: "لم يرجع النموذج محتوى نصيًا. جرّب صياغة الطلب من جديد." });
-    return res.status(200).json({ text, model, provider: "Google Gemini" });
+    if (type === "project_ideas" || type === "json_prompts") {\n      let parsed;\n      try { parsed = extractJson(text); } catch (_) {\n        console.error("Structured response JSON parse failed", { type, model, responseLength: text.length });\n        return res.status(502).json({ error: "الذكاء الاصطناعي رجّع تنسيق JSON غير صالح. جرّب مرة أخرى.", code: "INVALID_MODEL_JSON" });\n      }\n      if (type === "project_ideas" && !Array.isArray(parsed)) return res.status(502).json({ error: "استجابة الأفكار ليست قائمة. جرّب مرة أخرى.", code: "INVALID_IDEAS_SHAPE" });\n      if (type === "json_prompts" && (!parsed || !Array.isArray(parsed.prompts))) return res.status(502).json({ error: "استجابة الـ prompts لا تحتوي على قائمة prompts صالحة.", code: "INVALID_PROMPTS_SHAPE" });\n      return res.status(200).json({ items: parsed, text: JSON.stringify(parsed, null, 2), model, provider: "Google Gemini" });\n    }\n    return res.status(200).json({ text, model, provider: "Google Gemini" });
   } catch (error) {
     return res.status(500).json({ error: "حصل خطأ أثناء الاتصال. جرّب مرة أخرى.", code: "SERVER_ERROR" });
   }
