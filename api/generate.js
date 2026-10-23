@@ -9,15 +9,15 @@ const PLATFORM_GUIDANCE = {
   X: "concise X post or thread with a strong first line"
 };
 
-function buildPrompt({ type, topic, platform, tone, goal, audience, language }) {
+function buildPrompt({ type, topic, platform, tone, goal, audience, language, projectType, selectedIdea }) {
   const typeNames = { post: "social post", video: "short-form video script", ideas: "a list of distinct content ideas", plan: "a practical 7-day content plan", project_ideas: "project-specific content idea generation", json_prompts: "structured JSON prompts for a selected idea" };
   return [
     "You are Content Factory, an expert social media strategist and AI-content producer.",
     "Return useful, specific, editable content. Avoid generic filler, fabricated facts, fake trend claims, guaranteed virality, and unsupported statistics.",
     "Write in the requested language. If Arabic is requested, use natural Egyptian Arabic unless the brief asks otherwise.",
     "Output type: " + typeNames[type],
-    "Project media type: " + (body.projectType || "written") + " (written, image, or video)",
-    "Selected idea (when generating prompts): " + (body.selectedIdea || "not provided"),
+    "Project media type: " + (projectType || "written") + " (written, image, or video)",
+    "Selected idea (when generating prompts): " + (selectedIdea || "not provided"),
     type === "project_ideas" ? "Return ONLY valid JSON array of 8 objects with keys title, description, hook, angle, format. Ideas must match project media type and platform. No markdown fences." : "",
     type === "json_prompts" ? "Return ONLY valid JSON object, no markdown fences. Schema: {\"project_type\":\"written|image|video\",\"platform\":string,\"selected_idea\":string,\"prompts\":[{\"purpose\":string,\"prompt\":string,\"negative_prompt\":string,\"parameters\":{}}],\"notes\":string}. For written content prompt, provide a structured generation instruction; image prompt should describe subject, composition, lighting, style, aspect ratio and text policy; video prompt should include scenes, camera movement, duration, motion, audio and transitions. Keep every prompt value useful and detailed. JSON must parse." : "",
     "Topic/brief: " + topic,
