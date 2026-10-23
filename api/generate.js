@@ -1,0 +1,76 @@
+// Vercel serverless function. Keep GEMINI_API_KEY in Vercel Environment Variables.
+const ALLOWED_TYPES = new Set(["post", "video", "ideas", "plan"]);
+const PLATFORM_GUIDANCE = {
+  Instagram: "caption optimized for Instagram, readable line breaks, relevant hashtags, visual suggestion",
+  Facebook: "conversational Facebook post with a clear opening and a natural engagement prompt",
+  TikTok: "short vertical-video concept with a fast hook, beat-by-beat script, on-screen text and CTA",
+  YouTube: "YouTube video/Short script with title, hook, structure and CTA",
+  LinkedIn: "professional LinkedIn post with a useful insight and credible tone",
+  X: "concise X post or thread with a strong first line"
+};
+
+function buildPrompt({ type, topic, platform, tone, goal, audience, language }) {
+  const typeNames = { post: "social post", video: "short-form video script", ideas: "a list of distinct content ideas", plan: "a practical 7-day content plan" };
+  return [
+    "You are Content Factory, an expert social media strategist and AI-content producer.",
+    "Return useful, specific, editable content. Avoid generic filler, fabricated facts, fake trend claims, guaranteed virality, and unsupported statistics.",
+    "Write in the requested language. If Arabic is requested, use natural Egyptian Arabic unless the brief asks otherwise.",
+    "Output type: " + typeNames[type],
+    "Topic/brief: " + topic,
+    "Platform: " + platform + " — " + (PLATFORM_GUIDANCE[platform] || "adapt the format to the platform"),
+    "Tone: " + (tone || "clear and engaging"),
+    "Goal: " + (goal || "engagement"),
+    "Audience: " + (audience || "not specified; state any assumptions briefly"),
+    "Language: " + (language || "Arabic"),
+    "For video, include a hook, timed scenes, spoken script, on-screen text, visual direction, and CTA.",
+    "For ideas, make each idea distinct and include a hook and suggested format.",
+    "For a plan, include day, format, angle, hook, CTA, and purpose.",
+    "Return the content directly with useful headings. Do not claim that anything was published."
+  ].join("\n");
+}
+
+module.exports = async function handler(req, res) {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed." });
+  }
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
+    return res.status(503).json({
+      error: "AI غير مفعّل بعد. أضف GEMINI_API_KEY في إعدادات Environment Variables على Vercel ثم أعد النشر.",
+      code: "AI_NOT_CONFIGURED"
+    });
+  }
+  const body = req.body || {};
+  const type = ALLOWED_TYPES.has(body.type) ? body.type : "post";
+  const topic = typeof body.topic === "string" ? body.topic.trim().slice(0, 6000) : "";
+  const platform = typeof body.platform === "string" ? body.platform.slice(0, 40) : "Instagram";
+  if (topic.length < 3) return res.status(400).json({ error: "اكتب وصفًا أو فكرة أوضح قبل التوليد." });
+  try {
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: "You are an expert, honest social media content producer. Produce actionable, platform-aware content in the requested language." }] },
+        contents: [{ role: "user", parts: [{ text: buildPrompt({ ...body, type, topic, platform }) }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 1800 }
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data && data.error && data.error.message ? data.error.message : "تعذر الاتصال بمزوّد الذكاء الاصطناعي.";
+      return res.status(response.status === 429 ? 429 : 502).json({
+        error: response.status === 429 ? "وصلنا إلى حد الاستخدام الحالي للمزوّد. جرّب لاحقًا أو راجع حدود حسابك." : "فشل طلب الذكاء الاصطناعي: " + message,
+        code: response.status === 429 ? "RATE_LIMITED" : "PROVIDER_ERROR"
+      });
+    }
+    const text = (data.candidates || []).flatMap(c => c.content && c.content.parts ? c.content.parts : []).map(p => p.text || "").join("\n").trim();
+    if (!text) return res.status(502).json({ error: "لم يرجع النموذج محتوى نصيًا. جرّب صياغة الطلب من جديد." });
+    return res.status(200).json({ text, model, provider: "Google Gemini" });
+  } catch (error) {
+    return res.status(500).json({ error: "حصل خطأ أثناء الاتصال. جرّب مرة أخرى.", code: "SERVER_ERROR" });
+  }
+};
