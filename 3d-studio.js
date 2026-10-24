@@ -163,11 +163,11 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
   function applyMotion(eased,t) {
     const root=importedRoot || product;
     if(!root)return;
-    const d=Number(motion?.rotation_degrees || 180)*Math.PI/180;
     const type=motion?.type || 'rotate';
-    root.rotation.y=d*eased;
-    if(type==='float') root.position.y=Math.sin(eased*Math.PI)*.55;
-    else root.position.y=0;
+    const degrees=Number(motion?.rotation_degrees ?? 180);
+    // Only rotate the subject for rotation-based actions; camera-only moves must not spin the model.
+    root.rotation.y=(type==='rotate' || type==='product') ? degrees*Math.PI/180*eased : 0;
+    root.position.y=type==='float' ? Math.sin(eased*Math.PI*2)*.28 : 0;
     if(type==='orbit' || type==='product') {
       const a=eased*Math.PI*.65, radius=type==='product'?6.5:7.5;
       camera.position.set(Math.sin(a)*radius,3.0,Math.cos(a)*radius);
@@ -186,16 +186,34 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
   function buildMotion() {
     const prompt=document.getElementById('studio3d-prompt').value.trim();
     duration=Math.max(1,Math.min(60,Number(document.getElementById('studio3d-duration').value)||3));
-    const type=document.getElementById('studio3d-motion').value;
-    const degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
+    let type=document.getElementById('studio3d-motion').value;
+    let degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
+    // Lightweight bilingual intent parsing. It is deterministic and never sends prompt text to a remote service.
+    const p=prompt.toLowerCase();
+    const hasCamera=/(كاميرا|الكاميرا|camera|orbit|قوس جانبي|حول المجسم|حول المنتج)/i.test(p);
+    const hasRotate=/(لف|يدور|دوران|rotate|spin|turn|درجة|degrees?)/i.test(p);
+    const hasFloat=/(يطفو|طفو|يرتفع|ينخفض|ارتفاع وانخفاض|float|rise|fall|hover|levitat)/i.test(p);
+    const hasZoom=/(اقترب|اقتراب|زووم|تكبير|zoom|push.?in|dolly)/i.test(p);
+    if(hasFloat && !hasCamera && !hasRotate) type='float';
+    else if(hasCamera && (hasRotate || hasZoom)) type='product';
+    else if(hasCamera) type='orbit';
+    else if(hasFloat) type='float';
+    else if(hasRotate) type='rotate';
+    const degreeMatch=p.match(/(-?\d{1,3})\s*(?:درجة|درجات|degrees?)/i);
+    if(degreeMatch) degrees=Math.max(-720,Math.min(720,Number(degreeMatch[1])));
+    else if(/نصف\s*(?:دورة|لفة)|half\s*(?:a\s*)?turn/i.test(p)) degrees=180;
+    else if(/دورة\s*كاملة|لفة\s*كاملة|full\s*(?:rotation|turn)/i.test(p)) degrees=360;
+    document.getElementById('studio3d-motion').value=type;
+    document.getElementById('studio3d-degrees').value=degrees;
     const spec={schema_version:'1.0',engine:'three.js',source_prompt:prompt,duration_seconds:duration,fps:24,easing:'smoothstep',subject:importedRoot?'imported_model':'demo_bottle',actions:[],constraints:['preserve_mesh_geometry','no_unintended_scale_changes','camera_motion_is_independent_of_subject_rotation']};
     if(type==='rotate'||type==='product') spec.actions.push({start_seconds:0,end_seconds:type==='product'?duration*.66:duration,target:'subject',property:'rotation_y_degrees',from:0,to:degrees,easing:'ease_in_out'});
     if(type==='orbit'||type==='product') spec.actions.push({start_seconds:type==='product'?duration*.45:0,end_seconds:duration,target:'camera',property:'orbit_around_subject',direction:'clockwise',easing:'ease_in_out'});
-    if(type==='float') spec.actions.push({start_seconds:0,end_seconds:duration,target:'subject',property:'position_y',from:0,to:.55,curve:'sine_wave'});
-    if(prompt) spec.interpretation_note='This first-pass planner uses selected motion controls and does not infer every instruction in the natural-language prompt.';
+    if(type==='float') spec.actions.push({start_seconds:0,end_seconds:duration,target:'subject',property:'position_y',from:0,to:.28,curve:'sine_wave',cycles:1});
+    spec.interpretation={motion_type:type,rotation_degrees:degrees,duration_seconds:duration,parsing:'local_rules',confidence:(hasCamera||hasRotate||hasFloat)?'rule_matched':'controls_only'};
+    spec.interpretation_note='Local rule-based interpretation: review the inferred motion type and values before exporting. The free-text prompt is not a full natural-language animation model.';
     motion={type,rotation_degrees:degrees,spec};
     specNode.textContent=JSON.stringify(spec,null,2);
-    setStatus('تم إنشاء مخطط أولي. راجع البيانات؛ النص الحر محفوظ، أما نوع الحركة وزاويتها ومدتها فتم أخذها من عناصر التحكم.');
+    setStatus('تم تجهيز مخطط الحركة. تم تحليل كلمات الحركة والزوايا المعروفة محليًا؛ راجع نوع الحركة والمدة قبل التشغيل.');
     document.getElementById('studio3d-progress').style.width='0%';
   }
   document.getElementById('studio3d-build').addEventListener('click',buildMotion);
