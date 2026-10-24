@@ -279,8 +279,16 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   }
   $('studio3d-create').addEventListener('click',()=>{
     if(!renderer)initScene();const prompt=$('studio3d-object-prompt').value.trim()||'جسم جديد',shape=inferShape(prompt,$('studio3d-shape').value),manualColor=$('studio3d-color').value,color=manualColor==='#48b9d0'?inferColor(prompt,manualColor):manualColor;
+    const startCount=objects.length;
+    const wantsPerson=/شخص|إنسان|انسان|بني آدم|بنيادم|رجل|امرأة|ست|ولد|بنت|طفل|طفلة|human|person|man|woman|boy|girl|child|character/.test(prompt.toLowerCase());
+    const wantsBall=/كرة|كره|كورة|كورَه|ball|football|soccer/.test(prompt.toLowerCase());
     const item=addObject({name:prompt.slice(0,32),shape,color,description:prompt,x:(objects.length%4-1.5)*2,z:Math.floor(objects.length/4)*2});
-    if(item)status('تم إنشاء '+item.name+' داخل المشهد. اختر الجسم لتخصيص حركته.');
+    if(item && wantsPerson && wantsBall){
+      // A compound request should create both requested objects, not collapse to a single primitive.
+      addObject({name:/ولد|طفل|boy|child/i.test(prompt)?'ولد':'شخص',shape:'person',color:inferClothingColor(prompt,'#3478c7'),description:prompt,x:item.root.position.x-1.1,z:item.root.position.z});
+      addObject({name:'كرة',shape:'sphere',color:inferColor(prompt,'#e34242'),description:'كرة',x:item.root.position.x+1.1,z:item.root.position.z});
+      status('تم إنشاء شخص وكرة كجسمين منفصلين. يمكنك تحديد كل واحد وضبط حركته.');
+    } else if(item) status('تم إنشاء '+item.name+' داخل المشهد. اختر الجسم لتخصيص حركته.');
   });
   $('studio3d-add-demo').addEventListener('click',()=>{if(!renderer)initScene();const i=objects.length;addObject({name:'كرة ذهبية '+(i+1),shape:'sphere',color:'#f5c451',x:(i%4-1.5)*2,z:Math.floor(i/4)*2});status('تمت إضافة جسم تجريبي جديد.');});
   $('studio3d-save-motion').addEventListener('click',saveSelectedMotion);
