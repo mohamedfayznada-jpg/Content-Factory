@@ -24,16 +24,24 @@ module.exports = async function handler(req, res) {
       body:JSON.stringify({
         systemInstruction:{parts:[{text:"أنت خبير محترف في صياغة برومبتات توليد الصور. افحص كل الصور المرجعية المرفقة بصريًا، وادمج ما يفيد منها في وصف نهائي واضح. لا تخترع تفاصيل غير مرئية. أعد JSON صالحًا فقط حسب المخطط المطلوب."}]},
         contents:[{role:"user",parts}],
-        generationConfig:{temperature:0.45,maxOutputTokens:1800,responseMimeType:"application/json"}
+        generationConfig:{temperature:0.2,maxOutputTokens:2400,responseMimeType:"application/json",responseSchema:{type:"OBJECT",properties:{enhanced_prompt:{type:"STRING"},negative_prompt:{type:"STRING"},visual_direction:{type:"OBJECT",properties:{subject:{type:"STRING"},composition:{type:"STRING"},lighting:{type:"STRING"},palette:{type:"STRING"},style:{type:"STRING"},camera:{type:"STRING"},details:{type:"ARRAY",items:{type:"STRING"}}},required:["subject","composition","lighting","palette","style","camera","details"]},reference_usage:{type:"ARRAY",items:{type:"STRING"}},aspect_ratio:{type:"STRING"}},required:["enhanced_prompt","negative_prompt","visual_direction","reference_usage","aspect_ratio"]}}
       })
     });
     const data = await upstream.json().catch(()=>({}));
     if (!upstream.ok) return res.status(upstream.status === 429 ? 429 : 502).json({error:upstream.status === 429 ? "وصلت لحد استخدام الذكاء الاصطناعي حاليًا؛ جرّب لاحقًا." : "فشل تحسين البرومبت: " + (data.error?.message || "خطأ من المزوّد")});
     const text = (data.candidates || []).flatMap(c=>c.content?.parts || []).map(p=>p.text || "").join("\n").trim();
     let parsed;
-    try { parsed = JSON.parse(text.replace(/^\s*```(?:json)?\s*/i,"").replace(/\s*```\s*$/,"")); }
-    catch { return res.status(502).json({error:"الذكاء الاصطناعي رجّع JSON غير صالح. اضغط تحسين مرة أخرى."}); }
-    if (!parsed || typeof parsed.enhanced_prompt !== "string") return res.status(502).json({error:"البرومبت المحسّن ناقص. جرّب مرة أخرى."});
+    const cleaned = text.replace(/^\\s*```(?:json)?\\s*/i,"").replace(/\\s*```\\s*$/,"").trim();
+    try { parsed = JSON.parse(cleaned); }
+    catch {
+      const first = cleaned.indexOf("{"), last = cleaned.lastIndexOf("}");
+      if (first >= 0 && last > first) { try { parsed = JSON.parse(cleaned.slice(first, last + 1)); } catch {} }
+    }
+    if (!parsed || typeof parsed.enhanced_prompt !== "string" || !parsed.enhanced_prompt.trim()) return res.status(502).json({error:"تعذر قراءة نتيجة التحسين من النموذج. جرّب مرة أخرى، أو استخدم الوصف الأصلي مباشرة."});
+    parsed.negative_prompt = typeof parsed.negative_prompt === "string" ? parsed.negative_prompt : "";
+    parsed.visual_direction = parsed.visual_direction && typeof parsed.visual_direction === "object" ? parsed.visual_direction : {};
+    parsed.reference_usage = Array.isArray(parsed.reference_usage) ? parsed.reference_usage : [];
+    parsed.aspect_ratio = typeof parsed.aspect_ratio === "string" ? parsed.aspect_ratio : String(body.ratio || "1:1");
     return res.status(200).json({items:parsed,model,provider:"Google Gemini",referencesAnalyzed:refs.length});
   } catch {
     return res.status(500).json({error:"حصل خطأ أثناء تحسين البرومبت. جرّب مرة أخرى."});
