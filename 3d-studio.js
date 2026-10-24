@@ -21,7 +21,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   .studio3d-field textarea{min-height:78px}.studio3d-note,.studio3d-status{font-size:12px;line-height:1.8;color:#6f7785}
   .studio3d-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.studio3d-actions .btn{flex:1}
   .studio3d-object-list{display:grid;gap:6px;margin:10px 0}
-  .studio3d-timeline-list{display:grid;gap:7px;margin:12px 0}.studio3d-action-item{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid #e8ded7;border-radius:10px;padding:9px;background:#fffaf6}.studio3d-action-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-action-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-action-item .action-pick{text-align:right;background:transparent}.studio3d-action-item .action-delete{background:#fbe3e7;color:#881e3f}.studio3d-object-item{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #e8ded7;border-radius:10px;background:#fffaf6}.studio3d-object-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-object-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-object-item .pick{flex:1;text-align:right;background:transparent}.studio3d-object-item .remove{background:#fbe3e7;color:#881e3f}
+  .studio3d-timeline-list{display:grid;gap:7px;margin:12px 0}.studio3d-action-item{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid #e8ded7;border-radius:10px;padding:9px;background:#fffaf6}.studio3d-action-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-action-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-action-tools{display:flex;gap:4px;align-items:center}.studio3d-action-tools button{min-width:32px;background:#f0e7e1}.studio3d-action-tools button:disabled{opacity:.35;cursor:not-allowed}.studio3d-action-meta{display:block;font-size:11px;color:#6f7785;margin-top:3px}.studio3d-action-item .action-pick{text-align:right;background:transparent}.studio3d-action-item .action-delete{background:#fbe3e7;color:#881e3f}.studio3d-object-item{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #e8ded7;border-radius:10px;background:#fffaf6}.studio3d-object-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-object-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-object-item .pick{flex:1;text-align:right;background:transparent}.studio3d-object-item .remove{background:#fbe3e7;color:#881e3f}
   .studio3d-spec{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-height:230px;background:#1a0f12;color:#f9e6d1;border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,monospace}
   @media(max-width:850px){.studio3d-grid{grid-template-columns:1fr}.studio3d-stage{height:350px}}
   `;
@@ -309,16 +309,40 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
     return {type,duration,degrees,prompt:prompt||type,start:0,end:duration};
   }
+  function normalizeActionSequence(item){
+    const actions=item.motion.actions||[];
+    let cursor=0;
+    actions.forEach(action=>{
+      action.duration=Math.max(.5,Math.min(60,Number(action.duration)||3));
+      action.start=Number(cursor.toFixed(2));
+      action.end=Number((cursor+action.duration).toFixed(2));
+      cursor+=action.duration;
+    });
+    item.motion.duration=Math.max(1,cursor);
+  }
   function renderMotionTimeline(item){
     const host=$('studio3d-motion-timeline');host.innerHTML='';
-    (item.motion.actions||[]).forEach((action,index)=>{
+    const actions=item.motion.actions||[];
+    actions.forEach((action,index)=>{
       const row=document.createElement('div');row.className='studio3d-action-item'+(index===selectedActionIndex?' active':'');
-      const pick=document.createElement('button');pick.className='action-pick';pick.textContent=(index+1)+'. '+({rotate:'دوران',float:'طفو',orbit:'مدار',move:'تحريك',pulse:'تكبير وتصغير'}[action.type]||action.type)+' · '+action.duration+'ث · تبدأ '+action.start+'ث';
+      const pick=document.createElement('button');pick.className='action-pick';
+      pick.innerHTML='<strong>'+(index+1)+'. '+({rotate:'دوران',float:'طفو',orbit:'مدار',move:'تحريك',pulse:'تكبير وتصغير'}[action.type]||action.type)+'</strong><span class="studio3d-action-meta">من '+action.start+' إلى '+action.end+' ثانية · '+action.duration+' ث</span>';
       pick.onclick=()=>{selectedActionIndex=index;loadActionForm(action);renderMotionTimeline(item);$('studio3d-motion-status').textContent='تعديل الحركة رقم '+(index+1);};
-      const del=document.createElement('button');del.className='action-delete';del.textContent='حذف';del.onclick=()=>{item.motion.actions.splice(index,1);selectedActionIndex=Math.max(0,Math.min(selectedActionIndex,item.motion.actions.length-1));renderMotionTimeline(item);updateSpec();loadSelected();};
-      row.append(pick,del);host.appendChild(row);
+      const tools=document.createElement('div');tools.className='studio3d-action-tools';
+      const up=document.createElement('button');up.type='button';up.textContent='↑';up.title='تحريك لأعلى';up.disabled=index===0;up.onclick=()=>reorderMotion(index,index-1);
+      const down=document.createElement('button');down.type='button';down.textContent='↓';down.title='تحريك لأسفل';down.disabled=index===actions.length-1;down.onclick=()=>reorderMotion(index,index+1);
+      const del=document.createElement('button');del.type='button';del.className='action-delete';del.textContent='×';del.title='حذف الحركة';del.onclick=()=>{actions.splice(index,1);selectedActionIndex=Math.max(0,Math.min(selectedActionIndex,actions.length-1));normalizeActionSequence(item);renderMotionTimeline(item);updateSpec();loadSelected();};
+      tools.append(up,down,del);row.append(pick,tools);host.appendChild(row);
     });
-    if(!(item.motion.actions||[]).length)host.innerHTML='<p class="studio3d-note">الـ Timeline فارغ. اضغط «حفظ» لإضافة أول حركة أو «إضافة حركة مركبة» لإضافة حركة جديدة.</p>';
+    if(!actions.length)host.innerHTML='<p class="studio3d-note">الـ Timeline فارغ. اضغط «حفظ» لإضافة أول حركة أو «إضافة حركة مركبة» لإضافة حركة جديدة.</p>';
+  }
+  function reorderMotion(from,to){
+    const item=objects.find(o=>o.id===selectedId);if(!item)return;
+    const actions=item.motion.actions||[];if(to<0||to>=actions.length)return;
+    const [action]=actions.splice(from,1);actions.splice(to,0,action);
+    selectedActionIndex=to;normalizeActionSequence(item);
+    loadActionForm(actions[to]);renderMotionTimeline(item);updateSpec();
+    $('studio3d-motion-status').textContent='تم تغيير ترتيب الحركات وإعادة ضبط توقيتها بالتتابع.';
   }
   function saveSelectedMotion(){
     const item=objects.find(o=>o.id===selectedId);if(!item)return;
@@ -329,7 +353,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
       action.start=item.motion.actions.length?Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1))):0;
       item.motion.actions.push(action);selectedActionIndex=item.motion.actions.length-1;
     }
-    item.motion.type=action.type;item.motion.duration=Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1)));
+    normalizeActionSequence(item);item.motion.type=action.type;item.motion.duration=Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1)));
     item.motion.degrees=action.degrees;item.motion.prompt=action.prompt;
     $('studio3d-motion-status').textContent='تم حفظ الحركة '+(selectedActionIndex+1)+' كما اخترتها.';
     renderMotionTimeline(item);updateSpec();status('تم حفظ حركة '+item.name+'. اضغط تشغيل لمعاينة التسلسل المركب.');
@@ -338,8 +362,8 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     const item=objects.find(o=>o.id===selectedId);if(!item)return;
     item.motion.actions ||= [];
     const action=readActionForm();
-    action.start=item.motion.actions.length?Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1))):0;
     item.motion.actions.push(action);selectedActionIndex=item.motion.actions.length-1;
+    normalizeActionSequence(item);
     item.motion.type=action.type;item.motion.duration=action.start+action.duration;item.motion.degrees=action.degrees;item.motion.prompt=action.prompt;
     loadActionForm(action);renderMotionTimeline(item);updateSpec();
     $('studio3d-motion-status').textContent='أُضيفت الحركة رقم '+(selectedActionIndex+1)+' عند '+action.start+' ثانية. اضغط حفظ بعد تعديلها.';
