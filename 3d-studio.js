@@ -4,322 +4,213 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/exporters/GLTFExporter.js';
 
 (() => {
-  const style = document.createElement('style');
-  style.textContent = `
-  .studio3d-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:16px}
-  .studio3d-stage{position:relative;min-height:390px;border-radius:15px;overflow:hidden;background:radial-gradient(circle at 50% 25%,#3d2934,#15131b 70%);border:1px solid #49303a}
-  .studio3d-stage canvas{display:block;width:100%;height:390px}
-  .studio3d-hud{position:absolute;top:12px;right:12px;display:flex;gap:6px;flex-wrap:wrap}
-  .studio3d-hud span{background:#1a0f12dd;color:#f9e6d1;border:1px solid #f5c45144;padding:5px 8px;border-radius:20px;font-size:10px}
-  .studio3d-timeline{height:8px;background:#eee4df;border-radius:8px;overflow:hidden;margin:12px 0}
-  .studio3d-timeline>div{height:100%;width:0;background:linear-gradient(90deg,#881e3f,#f5c451);transition:width .1s}
-  .studio3d-note{font-size:12px;line-height:1.9;color:#6f7785}
-  .studio3d-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .studio3d-actions .btn{flex:1}
-  .studio3d-field{display:grid;gap:6px;margin:12px 0}
-  .studio3d-field label{font-weight:800;font-size:12px}
-  .studio3d-field textarea,.studio3d-field input,.studio3d-field select{width:100%;border:1px solid #ded3cc;border-radius:10px;padding:10px;background:#fffdfb;font:inherit}
-  .studio3d-field textarea{min-height:95px}
-  .studio3d-spec{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-height:260px;background:#1a0f12;color:#f9e6d1;border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,monospace}
-  .studio3d-status{font-size:12px;color:#6f7785;line-height:1.8;margin-top:8px}
-  .studio3d-action-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;padding:9px;border:1px solid #e8ded7;border-radius:10px;margin:8px 0;background:#fffaf6}
-  .studio3d-action-row select,.studio3d-action-row input{min-width:0;width:100%;border:1px solid #ded3cc;border-radius:8px;padding:7px;background:#fff;font:inherit}
-  .studio3d-action-row button{border:0;border-radius:8px;padding:7px 10px;background:#fbe3e7;color:#881e3f}
-  @media(max-width:850px){.studio3d-grid{grid-template-columns:1fr}.studio3d-stage,.studio3d-stage canvas{min-height:320px;height:320px}}
+  const $ = id => document.getElementById(id);
+  if ($('page-3d-studio')) return;
+  const style=document.createElement('style');
+  style.textContent=`
+  .studio3d-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:16px}
+  .studio3d-stage{position:relative;height:490px;min-height:350px;border-radius:16px;overflow:hidden;background:#17151d;border:1px solid #49303a}
+  .studio3d-stage canvas{display:block;width:100%;height:100%}
+  .studio3d-hud{position:absolute;top:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:2}
+  .studio3d-hud span{background:#1a0f12dd;color:#f9e6d1;border:1px solid #f5c45144;padding:5px 8px;border-radius:20px;font-size:11px}
+  .studio3d-timeline{height:8px;background:#eee4df;border-radius:8px;overflow:hidden;margin:12px 0}.studio3d-timeline>div{height:100%;width:0;background:linear-gradient(90deg,#881e3f,#f5c451)}
+  .studio3d-field{display:grid;gap:6px;margin:11px 0}.studio3d-field label{font-weight:800;font-size:12px}
+  .studio3d-field textarea,.studio3d-field input,.studio3d-field select{width:100%;border:1px solid #ded3cc;border-radius:10px;padding:10px;background:#fffdfb;font:inherit;box-sizing:border-box}
+  .studio3d-field textarea{min-height:78px}.studio3d-note,.studio3d-status{font-size:12px;line-height:1.8;color:#6f7785}
+  .studio3d-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.studio3d-actions .btn{flex:1}
+  .studio3d-object-list{display:grid;gap:6px;margin:10px 0}.studio3d-object-item{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #e8ded7;border-radius:10px;background:#fffaf6}.studio3d-object-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-object-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-object-item .pick{flex:1;text-align:right;background:transparent}.studio3d-object-item .remove{background:#fbe3e7;color:#881e3f}
+  .studio3d-spec{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-height:230px;background:#1a0f12;color:#f9e6d1;border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,monospace}
+  @media(max-width:850px){.studio3d-grid{grid-template-columns:1fr}.studio3d-stage{height:350px}}
   `;
   document.head.appendChild(style);
-
-  const nav = document.querySelector('.brand-nav');
-  const main = document.querySelector('.app-main');
-  if (!nav || !main || document.getElementById('page-3d-studio')) return;
-
-  const navButton = document.createElement('button');
-  navButton.dataset.page = '3d-studio';
-  navButton.innerHTML = '<span>⬡</span><b class="nav-label">3D والتحريك</b>';
-  const imageNav = nav.querySelector('[data-page="image-studio"]');
-  if (imageNav) imageNav.insertAdjacentElement('afterend', navButton); else nav.append(navButton);
-
-  const page = document.createElement('div');
-  page.id = 'page-3d-studio';
-  page.className = 'page-view';
-  page.innerHTML = `
-    <section class="hero"><small>MF CREATIVE STUDIO / 3D LAB</small><h1>من الصورة إلى <em>مشهد متحرك</em></h1><p>استورد مجسمًا ثلاثي الأبعاد، حرّكه بوصف مفهوم، وعاين النتيجة في المتصفح. الأدوات الأساسية تعمل دون مفتاح API أو GPU على الخادم.</p></section>
-    <div class="studio3d-grid">
-      <div>
-        <section class="card">
-          <div class="head"><h2>معاينة المشهد</h2><span class="pill">Three.js · WebGL</span></div>
-          <div class="studio3d-stage" id="studio3d-stage"><div class="studio3d-hud"><span id="studio3d-object-label">مجسم تجريبي</span><span id="studio3d-run-label">جاهز</span></div></div>
-          <div class="studio3d-timeline"><div id="studio3d-progress"></div></div>
-          <div class="actions"><button class="btn primary" id="studio3d-play">▶ تشغيل الحركة</button><button class="btn" id="studio3d-reset">إعادة ضبط</button></div>
-          <div class="studio3d-status" id="studio3d-status" role="status">المشهد التجريبي جاهز. يمكنك استيراد ملف GLB/GLTF أو تجربة وصف الحركة.</div>
-        </section>
-        <section class="card">
-          <div class="head"><h2>ملف المجسم</h2></div>
-          <div class="studio3d-field"><label for="studio3d-file">استيراد مجسم (.glb / .gltf)</label><input id="studio3d-file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></div>
-          <p class="studio3d-note">ملفات GLTF التي تستخدم ملفات خامات منفصلة قد تحتاج إلى رفع ملف GLB المدمج بدلًا منها. الملفات المستوردة تتم معالجتها داخل المتصفح.</p>
-          <div class="studio3d-actions"><button class="btn" id="studio3d-export">تصدير المشهد كـ GLB</button><button class="btn" id="studio3d-export-spec">تنزيل وصف الحركة JSON</button></div>
-        </section>
-      </div>
-      <div>
-        <section class="card">
-          <div class="head"><h2>مخطط الحركة</h2></div>
-          <div class="studio3d-field"><label for="studio3d-prompt">اكتب الحركة باللغة الطبيعية</label><textarea id="studio3d-prompt">لف المجسم 180 درجة في ثانيتين، ثم حرّك الكاميرا في قوس جانبي ببطء لمدة ثانية.</textarea></div>
-          <div class="studio3d-field"><label for="studio3d-duration">مدة الحركة (ثوانٍ)</label><input id="studio3d-duration" type="number" min="1" max="60" step="0.5" value="3"></div>
-          <div class="studio3d-field"><label for="studio3d-motion">نوع الحركة</label><select id="studio3d-motion"><option value="rotate">دوران حول المحور الرأسي</option><option value="orbit">حركة كاميرا حول المجسم</option><option value="float">ارتفاع وانخفاض ناعم</option><option value="product">دوران منتج مع اقتراب الكاميرا</option></select></div>
-          <div class="studio3d-field"><label for="studio3d-degrees">زاوية الدوران</label><input id="studio3d-degrees" type="number" min="-720" max="720" step="15" value="180"></div>
-          <div class="studio3d-actions"><button class="btn primary" id="studio3d-build">تحليل الوصف وتجهيز الحركة</button><button class="btn" id="studio3d-add-action">+ إضافة حركة</button></div>
-          <div id="studio3d-actions-list" class="studio3d-action-list"></div>
-          <div class="studio3d-actions"><button class="btn" id="studio3d-record">● تسجيل فيديو WebM</button><button class="btn" id="studio3d-stop-record" disabled>إيقاف التسجيل</button></div>
-          <p class="studio3d-note">التحليل المحلي يستخرج المدة والزوايا وأنواع الحركة الشائعة. التسجيل يعتمد على دعم المتصفح لـ MediaRecorder وقد ينتج WebM، وليس MP4.</p>
-        </section>
-        <section class="card">
-          <div class="head"><h2>بيانات الحركة</h2></div>
-          <pre class="studio3d-spec" id="studio3d-spec">لم يتم إنشاء مخطط بعد.</pre>
-          <p class="studio3d-note">يشمل التصدير وصفًا منظمًا للحركة. تصدير GLB يحفظ هندسة المجسم والخامات؛ لا يفترض أن يحوّل مخطط الحركة هذا إلى Animation Clip قياسي.</p>
-        </section>
-      </div>
-    </div>`;
+  const nav=document.querySelector('.brand-nav'),main=document.querySelector('.app-main');
+  if(!nav||!main)return;
+  const navButton=document.createElement('button');navButton.dataset.page='3d-studio';navButton.innerHTML='<span>⬡</span><b class="nav-label">3D والتحريك</b>';
+  const after=nav.querySelector('[data-page="image-studio"]');after?after.insertAdjacentElement('afterend',navButton):nav.append(navButton);
+  const page=document.createElement('div');page.id='page-3d-studio';page.className='page-view';
+  page.innerHTML=`
+  <section class="hero"><small>MF CREATIVE STUDIO / 3D WORKSPACE</small><h1>ابنِ بيئة <em>ثلاثية الأبعاد</em></h1><p>أنشئ أشكالًا ثلاثية الأبعاد محليًا، اجمع أكثر من جسم في مشهد واحد، واكتب حركة مستقلة لكل جسم. لا يحتاج إنشاء الأشكال الأساسية إلى API مدفوع.</p></section>
+  <div class="studio3d-grid"><div>
+   <section class="card"><div class="head"><h2>المشهد ثلاثي الأبعاد</h2><span class="pill">Three.js · WebGL</span></div>
+    <div class="studio3d-stage" id="studio3d-stage"><div class="studio3d-hud"><span id="studio3d-count">0 أجسام</span><span id="studio3d-state">جاهز</span></div></div>
+    <div class="studio3d-timeline"><div id="studio3d-progress"></div></div>
+    <div class="studio3d-actions"><button class="btn primary" id="studio3d-play">▶ تشغيل كل الحركات</button><button class="btn" id="studio3d-stop">إيقاف</button><button class="btn" id="studio3d-home">إظهار المشهد كاملًا</button></div>
+    <p class="studio3d-status" id="studio3d-status" role="status">حمّل المشهد أو أضف جسمًا من لوحة إنشاء الأجسام. اسحب بالماوس للدوران، واستخدم عجلة الماوس للتقريب.</p>
+   </section>
+   <section class="card"><div class="head"><h2>الأجسام داخل المشهد</h2><span class="pill" id="studio3d-selected-label">لا يوجد تحديد</span></div><div id="studio3d-objects" class="studio3d-object-list"></div>
+    <div class="studio3d-actions"><button class="btn" id="studio3d-duplicate">نسخ الجسم المحدد</button><button class="btn" id="studio3d-delete">حذف المحدد</button></div>
+   </section>
+   <section class="card"><div class="head"><h2>استيراد وتصدير</h2></div><div class="studio3d-field"><label for="studio3d-file">استيراد جسم GLB / GLTF</label><input id="studio3d-file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></div>
+    <p class="studio3d-note">لأفضل توافق استخدم GLB مدمجًا. ملفات GLTF التي تعتمد على صور أو ملفات خارجية قد لا تعمل عند اختيار ملف واحد فقط.</p>
+    <div class="studio3d-actions"><button class="btn" id="studio3d-export">تصدير المشهد GLB</button><button class="btn" id="studio3d-export-json">تصدير الحركات JSON</button></div>
+   </section>
+  </div><div>
+   <section class="card"><div class="head"><h2>إنشاء جسم جديد</h2></div>
+    <div class="studio3d-field"><label for="studio3d-object-prompt">وصف الجسم</label><textarea id="studio3d-object-prompt" placeholder="مثال: زجاجة طويلة زرقاء، كرة ذهبية، صندوق أحمر">زجاجة مياه زرقاء</textarea></div>
+    <div class="studio3d-field"><label for="studio3d-shape">نوع الشكل الأساسي</label><select id="studio3d-shape"><option value="auto">استنتاج من الوصف</option><option value="bottle">زجاجة</option><option value="sphere">كرة</option><option value="box">صندوق</option><option value="cone">مخروط</option><option value="cylinder">أسطوانة</option><option value="torus">حلقة</option><option value="capsule">كبسولة</option></select></div>
+    <div class="studio3d-field"><label for="studio3d-color">اللون</label><input id="studio3d-color" type="color" value="#48b9d0"></div>
+    <div class="studio3d-actions"><button class="btn primary" id="studio3d-create">＋ توليد وإضافة الجسم</button><button class="btn" id="studio3d-add-demo">إضافة مثال جاهز</button></div>
+    <p class="studio3d-note">التوليد الحالي ينشئ مجسمات إجرائية من الوصف واللون داخل المتصفح؛ ليس تحويلًا بالذكاء الاصطناعي من صورة إلى Mesh واقعي.</p>
+   </section>
+   <section class="card"><div class="head"><h2>حركة الجسم المحدد</h2></div><p class="studio3d-note">اختَر جسمًا من قائمة المشهد، ثم عيّن وصف الحركة الخاص به. كل جسم يحتفظ بحركته المستقلة.</p>
+    <div class="studio3d-field"><label for="studio3d-motion-prompt">وصف الحركة</label><textarea id="studio3d-motion-prompt" placeholder="مثال: لف الجسم 360 درجة خلال 4 ثوانٍ">لف الجسم 180 درجة خلال 3 ثوانٍ</textarea></div>
+    <div class="studio3d-field"><label for="studio3d-motion-type">نوع الحركة</label><select id="studio3d-motion-type"><option value="rotate">دوران الجسم</option><option value="float">طفو لأعلى وأسفل</option><option value="orbit">دوران في مسار دائري</option><option value="move">تحرك من مكانه</option><option value="pulse">تكبير وتصغير</option></select></div>
+    <div class="studio3d-field"><label for="studio3d-motion-duration">المدة بالثواني</label><input id="studio3d-motion-duration" type="number" min="0.5" max="60" step="0.5" value="3"></div>
+    <div class="studio3d-field"><label for="studio3d-motion-degrees">زاوية الدوران (درجة)</label><input id="studio3d-motion-degrees" type="number" min="-1440" max="1440" step="15" value="180"></div>
+    <div class="studio3d-actions"><button class="btn primary" id="studio3d-save-motion">حفظ حركة الجسم</button><button class="btn" id="studio3d-clear-motion">مسح الحركة</button></div>
+    <div class="studio3d-note" id="studio3d-motion-status">لا توجد حركة محفوظة للجسم المحدد.</div>
+   </section>
+   <section class="card"><div class="head"><h2>ملخص المشهد</h2></div><pre class="studio3d-spec" id="studio3d-spec">أضف جسمًا لإنشاء مخطط المشهد.</pre></section>
+  </div></div>`;
   main.appendChild(page);
+  const sceneTitle=$('page-title');
+  function openPage(){document.querySelectorAll('.page-view').forEach(p=>p.classList.toggle('active',p===page));document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b===navButton));if(sceneTitle)sceneTitle.textContent='3D والتحريك';if(!renderer)initScene();resize();window.scrollTo({top:0,behavior:'smooth'});}
+  navButton.addEventListener('click',openPage);
+  document.addEventListener('click',e=>{if(e.target.closest('[data-go="3d-studio"]'))openPage();});
 
-  const title = document.getElementById('page-title');
-  const allPages = () => document.querySelectorAll('.page-view');
-  function goStudio() {
-    allPages().forEach(p => p.classList.toggle('active', p === page));
-    document.querySelectorAll('[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === '3d-studio'));
-    if (title) title.textContent = '3D والتحريك';
-    window.scrollTo({top:0,behavior:'smooth'});
-    if (!renderer) initScene();
-    resize();
+  let renderer,scene,camera,controls,raf=0,playing=false,startAt=0,duration=3,selectedId=null,objects=[],nextId=1;
+  const clock=new THREE.Clock();
+  const status=t=>{$('studio3d-status').textContent=t;};
+  const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.32,metalness:.18});
+  function initScene(){
+    if(renderer)return;
+    scene=new THREE.Scene();scene.background=new THREE.Color('#17151d');
+    camera=new THREE.PerspectiveCamera(45,1,.1,500);camera.position.set(7,5.5,9);
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+    $('studio3d-stage').appendChild(renderer.domElement);
+    controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.07;controls.target.set(0,1,0);controls.minDistance=2;controls.maxDistance=60;
+    scene.add(new THREE.HemisphereLight(0xffffff,0x353044,2.1));
+    const key=new THREE.DirectionalLight(0xffe0b2,3.2);key.position.set(5,9,6);scene.add(key);
+    const rim=new THREE.DirectionalLight(0x8c7bff,2);rim.position.set(-5,5,-6);scene.add(rim);
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#29252f',roughness:.82}));floor.rotation.x=-Math.PI/2;floor.position.y=-.035;scene.add(floor);
+    const grid=new THREE.GridHelper(30,30,'#675765','#39333f');grid.position.y=-.02;scene.add(grid);
+    resize();window.addEventListener('resize',resize);animate();
   }
-  navButton.addEventListener('click', goStudio);
-  document.addEventListener('click', e => {
-    const target = e.target.closest('[data-go="3d-studio"]');
-    if (target) goStudio();
-  });
-
-  const stage = document.getElementById('studio3d-stage');
-  const status = document.getElementById('studio3d-status');
-  const specNode = document.getElementById('studio3d-spec');
-  let renderer, scene, camera, controls, product, importedRoot = null, animationFrame = 0, playing = false, startAt = 0, duration = 3, motion = null, raf = 0;
-  const clock = new THREE.Clock();
-
-  function setStatus(text) { status.textContent = text; }
-  function initScene() {
-    if (renderer) return;
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color('#1b1720');
-    camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(4.4, 3.1, 6.5);
-    renderer = new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    stage.appendChild(renderer.domElement);
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.target.set(0,1,0);
-    scene.add(new THREE.HemisphereLight(0xffe8d0,0x312033,2.0));
-    const key = new THREE.DirectionalLight(0xffd59a,3.2); key.position.set(4,7,5); scene.add(key);
-    const rim = new THREE.DirectionalLight(0xff527d,2.0); rim.position.set(-5,3,-4); scene.add(rim);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#28232b',roughness:.72,metalness:.12}));
-    floor.rotation.x = -Math.PI/2; floor.position.y = -0.03; scene.add(floor);
-    const grid = new THREE.GridHelper(10,20,'#66505b','#403640'); grid.position.y = -0.015; scene.add(grid);
-    createDemoObject();
-    resize();
-    window.addEventListener('resize',resize);
-    animate();
+  function resize(){if(!renderer)return;const el=$('studio3d-stage');const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
+  function createGeometry(shape,color){
+    const material=mat(color);
+    const group=new THREE.Group();
+    if(shape==='auto')shape='sphere';
+    if(shape==='bottle'){
+      const glass=new THREE.MeshPhysicalMaterial({color,roughness:.2,metalness:.1,clearcoat:1,transmission:.05});
+      const body=new THREE.Mesh(new THREE.CylinderGeometry(.48,.42,1.65,40),glass);body.position.y=.95;group.add(body);
+      const shoulder=new THREE.Mesh(new THREE.SphereGeometry(.42,32,16),glass);shoulder.scale.y=.42;shoulder.position.y=1.78;group.add(shoulder);
+      const neck=new THREE.Mesh(new THREE.CylinderGeometry(.17,.2,.28,32),glass);neck.position.y=2.03;group.add(neck);
+      const cap=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.22,32),mat('#f5c451'));cap.position.y=2.28;group.add(cap);
+    } else {
+      let mesh;
+      if(shape==='sphere')mesh=new THREE.Mesh(new THREE.SphereGeometry(.72,40,28),material);
+      else if(shape==='box')mesh=new THREE.Mesh(new THREE.BoxGeometry(1.25,1.25,1.25),material);
+      else if(shape==='cone')mesh=new THREE.Mesh(new THREE.ConeGeometry(.72,1.6,40),material);
+      else if(shape==='cylinder')mesh=new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,1.5,40),material);
+      else if(shape==='torus')mesh=new THREE.Mesh(new THREE.TorusGeometry(.62,.22,18,48),material);
+      else if(shape==='capsule')mesh=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.8,8,24),material);
+      else mesh=new THREE.Mesh(new THREE.SphereGeometry(.72,40,28),material);
+      mesh.position.y=shape==='torus'?.85:(shape==='box'?.7:(shape==='cone'?.8:(shape==='cylinder'?.75:(shape==='capsule'?.85:.72))));group.add(mesh);
+    }
+    return group;
   }
-  function createDemoObject() {
-    if (importedRoot) { scene.remove(importedRoot); disposeTree(importedRoot); importedRoot=null; }
-    if (product) { scene.remove(product); disposeTree(product); }
-    product = new THREE.Group();
-    const glass = new THREE.MeshPhysicalMaterial({color:'#8ad9e9',metalness:.12,roughness:.16,transmission:.15,thickness:.3,clearcoat:1});
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(.62,.52,2.0,64,1,false),glass);
-    body.position.y=1.15; product.add(body);
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(.52,48,24),glass); shoulder.scale.set(1,.52,1); shoulder.position.y=2.12; product.add(shoulder);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(.24,.28,.28,48),new THREE.MeshStandardMaterial({color:'#b7e9f3',metalness:.18,roughness:.22})); neck.position.y=2.43; product.add(neck);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.32,48),new THREE.MeshStandardMaterial({color:'#f5c451',metalness:.42,roughness:.25})); cap.position.y=2.72; product.add(cap);
-    const label = new THREE.Mesh(new THREE.CylinderGeometry(.626,.526,.72,64,1,true),new THREE.MeshStandardMaterial({color:'#881e3f',roughness:.55,metalness:.05,side:THREE.DoubleSide}));
-    label.position.y=1.12; product.add(label);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(.62,.025,12,64),new THREE.MeshStandardMaterial({color:'#f5c451',metalness:.6,roughness:.22})); ring.rotation.x=Math.PI/2; ring.position.y=1.5; product.add(ring);
-    scene.add(product);
-    document.getElementById('studio3d-object-label').textContent='زجاجة تجريبية';
+  function inferShape(text,chosen){
+    if(chosen!=='auto')return chosen;
+    const p=text.toLowerCase();
+    if(/زجاجة|قارورة|bottle|water/.test(p))return 'bottle';
+    if(/صندوق|مكعب|box|cube/.test(p))return 'box';
+    if(/مخروط|cone/.test(p))return 'cone';
+    if(/اسطوانة|أسطوانة|cylinder/.test(p))return 'cylinder';
+    if(/حلقة|دونات|torus|ring|donut/.test(p))return 'torus';
+    if(/كبسولة|capsule/.test(p))return 'capsule';
+    return 'sphere';
   }
-  function disposeTree(root) { root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){for(const m of (Array.isArray(o.material)?o.material:[o.material]))m.dispose();}}); }
-  function resize() {
-    if(!renderer || !stage.clientWidth) return;
-    const w=stage.clientWidth,h=stage.clientHeight || 390;
-    camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
+  function addObject({name,shape='sphere',color='#48b9d0',x=0,z=0,root=null}={}){
+    if(objects.length>=30){status('الحد الأقصى 30 جسمًا في المشهد.');return null;}
+    const id=nextId++,objectRoot=root||createGeometry(shape,color);
+    objectRoot.position.set(x,0,z);objectRoot.userData.objectId=id;scene.add(objectRoot);
+    const item={id,name:name||('جسم '+id),shape,color,root:objectRoot,motion:{type:'rotate',duration:3,degrees:180,prompt:'لف الجسم 180 درجة خلال 3 ثوانٍ'}};
+    objects.push(item);selectedId=id;renderObjectList();loadSelected();updateSpec();focusObject(item);return item;
   }
-  function animate() {
+  function focusObject(item){if(!item||!camera)return;controls.target.set(item.root.position.x,1,item.root.position.z);controls.update();}
+  function dispose(root){root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)for(const m of(Array.isArray(o.material)?o.material:[o.material]))m.dispose();});}
+  function renderObjectList(){
+    const host=$('studio3d-objects');host.innerHTML='';
+    objects.forEach(item=>{
+      const row=document.createElement('div');row.className='studio3d-object-item'+(item.id===selectedId?' active':'');
+      const pick=document.createElement('button');pick.className='pick';pick.textContent=item.name+' · '+item.shape;pick.onclick=()=>{selectedId=item.id;renderObjectList();loadSelected();focusObject(item);};
+      const del=document.createElement('button');del.className='remove';del.textContent='×';del.title='حذف الجسم';del.onclick=()=>removeObject(item.id);
+      row.append(pick,del);host.appendChild(row);
+    });
+    $('studio3d-count').textContent=objects.length+' أجسام';const item=objects.find(o=>o.id===selectedId);$('studio3d-selected-label').textContent=item?item.name:'لا يوجد تحديد';
+  }
+  function removeObject(id){const item=objects.find(o=>o.id===id);if(!item)return;scene.remove(item.root);dispose(item.root);objects=objects.filter(o=>o.id!==id);selectedId=objects[0]?.id??null;renderObjectList();loadSelected();updateSpec();}
+  function loadSelected(){
+    const item=objects.find(o=>o.id===selectedId),enabled=!!item;
+    ['studio3d-motion-prompt','studio3d-motion-type','studio3d-motion-duration','studio3d-motion-degrees','studio3d-save-motion','studio3d-clear-motion','studio3d-duplicate','studio3d-delete'].forEach(id=>$(id).disabled=!enabled);
+    if(!item){$('studio3d-motion-status').textContent='أضف أو اختَر جسمًا أولًا.';return;}
+    $('studio3d-motion-prompt').value=item.motion.prompt||'';$('studio3d-motion-type').value=item.motion.type;$('studio3d-motion-duration').value=item.motion.duration;$('studio3d-motion-degrees').value=item.motion.degrees;
+    $('studio3d-motion-status').textContent='الحركة المحفوظة: '+item.motion.type+' · '+item.motion.duration+' ث';
+  }
+  function saveSelectedMotion(){
+    const item=objects.find(o=>o.id===selectedId);if(!item)return;
+    const prompt=$('studio3d-motion-prompt').value.trim(),p=prompt.toLowerCase();
+    let type=$('studio3d-motion-type').value,duration=Math.max(.5,Math.min(60,Number($('studio3d-motion-duration').value)||3)),degrees=Math.max(-1440,Math.min(1440,Number($('studio3d-motion-degrees').value)||180));
+    const tm=p.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);if(tm)duration=Math.max(.5,Math.min(60,Number(tm[1].replace(',','.'))));
+    const dm=p.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
+    if(/طفو|يطفو|يرتفع|ينخفض|float|hover/.test(p))type='float';
+    else if(/مدار|دائرة|orbit|circle/.test(p))type='orbit';
+    else if(/تحرك|انتقل|move|slide/.test(p))type='move';
+    else if(/نبض|تكبير وتصغير|pulse|scale/.test(p))type='pulse';
+    else if(/لف|دوران|rotate|spin|turn/.test(p))type='rotate';
+    item.motion={type,duration,degrees,prompt:prompt||type};
+    $('studio3d-motion-type').value=type;$('studio3d-motion-duration').value=duration;$('studio3d-motion-degrees').value=degrees;
+    $('studio3d-motion-status').textContent='تم حفظ الحركة لهذا الجسم فقط.';updateSpec();status('حُفظت حركة '+item.name+'. اضغط تشغيل لمعاينة كل حركات المشهد.');
+  }
+  function applySceneTime(seconds){
+    for(const item of objects){
+      const m=item.motion||{},t=Math.min(1,seconds/Math.max(.1,m.duration||3)),ease=t*t*(3-2*t),root=item.root;
+      root.rotation.set(0,0,0);root.position.x=item.baseX??root.position.x;root.position.z=item.baseZ??root.position.z;root.scale.setScalar(1);
+      if(m.type==='rotate')root.rotation.y=(Number(m.degrees)||180)*Math.PI/180*ease;
+      if(m.type==='float')root.position.y=Math.sin(t*Math.PI*2)*.35;
+      if(m.type==='orbit'){const a=ease*Math.PI*2;root.position.x=(item.baseX||0)+Math.cos(a)*1.2;root.position.z=(item.baseZ||0)+Math.sin(a)*1.2;root.rotation.y=a;}
+      if(m.type==='move')root.position.x=(item.baseX||0)+Math.sin(ease*Math.PI)*2;
+      if(m.type==='pulse')root.scale.setScalar(1+.25*Math.sin(t*Math.PI*4));
+    }
+  }
+  function animate(){
     raf=requestAnimationFrame(animate);
-    const elapsed=playing?(performance.now()-startAt)/1000:0;
-    if(playing && motion) {
-      const t=Math.min(1,elapsed/duration);
-      const eased=t*t*(3-2*t);
-      applyMotion(eased,t);
-      document.getElementById('studio3d-progress').style.width=(t*100)+'%';
-      document.getElementById('studio3d-run-label').textContent='يعمل '+elapsed.toFixed(1)+'s';
-      if(t>=1){playing=false;document.getElementById('studio3d-play').textContent='▶ تشغيل الحركة';document.getElementById('studio3d-run-label').textContent='اكتملت';setStatus('اكتملت الحركة. يمكنك تعديل القيم أو تصدير المشهد والبيانات.');}
+    if(playing){
+      const elapsed=(performance.now()-startAt)/1000;applySceneTime(elapsed);
+      $('studio3d-progress').style.width=(Math.min(1,elapsed/duration)*100)+'%';$('studio3d-state').textContent=elapsed.toFixed(1)+' / '+duration+'s';
+      if(elapsed>=duration){playing=false;$('studio3d-state').textContent='اكتملت الحركة';status('اكتملت حركات المشهد.');}
     }
     controls?.update();renderer?.render(scene,camera);
   }
-  function applyMotion(eased,t) {
-    const root=importedRoot || product;
-    if(!root)return;
-    const type=motion?.type || 'rotate';
-    const degrees=Number(motion?.rotation_degrees ?? 180);
-    // Only rotate the subject for rotation-based actions; camera-only moves must not spin the model.
-    root.rotation.y=(type==='rotate' || type==='product') ? degrees*Math.PI/180*eased : 0;
-    root.position.y=type==='float' ? Math.sin(eased*Math.PI*2)*.28 : 0;
-    if(type==='orbit' || type==='product') {
-      const a=eased*Math.PI*.65, radius=type==='product'?6.5:7.5;
-      camera.position.set(Math.sin(a)*radius,3.0,Math.cos(a)*radius);
-      if(type==='product') camera.position.multiplyScalar(1-.18*eased);
-      camera.lookAt(0,1.1,0);
-    }
+  function updateSpec(){
+    const spec={schema_version:'1.1',engine:'three.js',scene:{object_count:objects.length,objects:objects.map(o=>({id:o.id,name:o.name,shape:o.shape,color:o.color,position:{x:Number(o.root.position.x.toFixed(3)),y:Number(o.root.position.y.toFixed(3)),z:Number(o.root.position.z.toFixed(3))},motion:o.motion}))}};
+    $('studio3d-spec').textContent=JSON.stringify(spec,null,2);
   }
-  function resetMotion() {
-    playing=false;motion=null;
-    const root=importedRoot || product;if(root){root.rotation.set(0,0,0);root.position.y=importedRoot?1:0;}
-    if(camera){camera.position.set(4.4,3.1,6.5);controls.target.set(0,1,0);controls.update();}
-    document.getElementById('studio3d-progress').style.width='0%';
-    document.getElementById('studio3d-run-label').textContent='جاهز';
-    document.getElementById('studio3d-play').textContent='▶ تشغيل الحركة';
-  }
-  let customActions = [];
-  function renderCustomActions() {
-    const host=document.getElementById('studio3d-actions-list');
-    if(!host)return;
-    host.innerHTML='';
-    customActions.forEach((a,i)=>{
-      const row=document.createElement('div');row.className='studio3d-action-row';
-      const kind=document.createElement('select');
-      [['rotate','دوران المجسم'],['orbit','حركة الكاميرا'],['float','طفو المجسم'],['zoom','اقتراب الكاميرا']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;kind.appendChild(o);});
-      kind.value=a.type;kind.setAttribute('aria-label','نوع الحركة');
-      const start=document.createElement('input');start.type='number';start.min='0';start.max='60';start.step='.25';start.value=a.start;start.title='بداية الحركة بالثواني';
-      const end=document.createElement('input');end.type='number';end.min='.25';end.max='60';end.step='.25';end.value=a.end;end.title='نهاية الحركة بالثواني';
-      const del=document.createElement('button');del.type='button';del.textContent='حذف';
-      kind.onchange=()=>{a.type=kind.value;};
-      start.onchange=()=>{a.start=Math.max(0,Math.min(duration,Number(start.value)||0));if(a.end<=a.start)a.end=Math.min(duration,a.start+.25);start.value=a.start;end.value=a.end;};
-      end.onchange=()=>{a.end=Math.max(a.start+.25,Math.min(60,Number(end.value)||a.start+1));end.value=a.end;};
-      del.onclick=()=>{customActions.splice(i,1);renderCustomActions();};
-      row.append(kind,start,end,del);host.appendChild(row);
-    });
-  }
-  document.getElementById('studio3d-add-action').addEventListener('click',()=>{
-    if(customActions.length>=12){setStatus('الحد الأقصى 12 حركة في هذا المخطط.');return;}
-    const start=customActions.length?customActions[customActions.length-1].end:0;
-    customActions.push({type:'rotate',start:Math.min(start,59),end:Math.min(60,Math.min(start,59)+1),degrees:180});
-    renderCustomActions();
+  $('studio3d-create').addEventListener('click',()=>{
+    if(!renderer)initScene();const prompt=$('studio3d-object-prompt').value.trim()||'جسم جديد',shape=inferShape(prompt,$('studio3d-shape').value),color=$('studio3d-color').value;
+    const item=addObject({name:prompt.slice(0,32),shape,color,x:(objects.length%4-1.5)*2,z:Math.floor(objects.length/4)*2});
+    if(item)status('تم إنشاء '+item.name+' داخل المشهد. اختر الجسم لتخصيص حركته.');
   });
-  function parseSeconds(text,fallback){
-        const m=text.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);
-    return m?Math.max(.25,Math.min(60,Number(m[1].replace(',','.')))):fallback;
-  }
-  function buildMotion() {
-    const prompt=document.getElementById('studio3d-prompt').value.trim();
-    duration=Math.max(1,Math.min(60,Number(document.getElementById('studio3d-duration').value)||3));
-        if(prompt && /\d+(?:[.,]\d+)?\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i.test(prompt)) duration=parseSeconds(prompt,duration);
-    let type=document.getElementById('studio3d-motion').value;
-    let degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
-    // Lightweight bilingual intent parsing. It is deterministic and never sends prompt text to a remote service.
-    const p=prompt.toLowerCase();
-    const hasCamera=/(كاميرا|الكاميرا|camera|orbit|قوس جانبي|حول المجسم|حول المنتج)/i.test(p);
-    const hasRotate=/(لف|يدور|دوران|rotate|spin|turn|درجة|degrees?)/i.test(p);
-    const hasFloat=/(يطفو|طفو|يرتفع|ينخفض|ارتفاع وانخفاض|float|rise|fall|hover|levitat)/i.test(p);
-    const hasZoom=/(اقترب|اقتراب|زووم|تكبير|zoom|push.?in|dolly)/i.test(p);
-    if(hasFloat && !hasCamera && !hasRotate) type='float';
-    else if(hasCamera && (hasRotate || hasZoom)) type='product';
-    else if(hasCamera) type='orbit';
-    else if(hasFloat) type='float';
-    else if(hasRotate) type='rotate';
-    const degreeMatch=p.match(/(-?\d{1,3})\s*(?:درجة|درجات|degrees?)/i);
-    if(degreeMatch) degrees=Math.max(-720,Math.min(720,Number(degreeMatch[1])));
-    else if(/نصف\s*(?:دورة|لفة)|half\s*(?:a\s*)?turn/i.test(p)) degrees=180;
-    else if(/دورة\s*كاملة|لفة\s*كاملة|full\s*(?:rotation|turn)/i.test(p)) degrees=360;
-    document.getElementById('studio3d-motion').value=type;
-    document.getElementById('studio3d-degrees').value=degrees;
-    const spec={schema_version:'1.0',engine:'three.js',source_prompt:prompt,duration_seconds:duration,fps:24,easing:'smoothstep',subject:importedRoot?'imported_model':'demo_bottle',actions:[],constraints:['preserve_mesh_geometry','no_unintended_scale_changes','camera_motion_is_independent_of_subject_rotation']};
-    if(type==='rotate'||type==='product') spec.actions.push({start_seconds:0,end_seconds:type==='product'?duration*.66:duration,target:'subject',property:'rotation_y_degrees',from:0,to:degrees,easing:'ease_in_out'});
-    if(type==='orbit'||type==='product') spec.actions.push({start_seconds:type==='product'?duration*.45:0,end_seconds:duration,target:'camera',property:'orbit_around_subject',direction:'clockwise',easing:'ease_in_out'});
-    if(type==='float') spec.actions.push({start_seconds:0,end_seconds:duration,target:'subject',property:'position_y',from:0,to:.28,curve:'sine_wave',cycles:1});
-    if(type==='product' && hasZoom) spec.actions.push({start_seconds:duration*.45,end_seconds:duration,target:'camera',property:'distance_scale',from:1,to:.82,easing:'ease_in_out'});
-    customActions.forEach(a=>spec.actions.push({start_seconds:a.start,end_seconds:a.end,target:a.type==='orbit'||a.type==='zoom'?'camera':'subject',property:({rotate:'rotation_y_degrees',orbit:'orbit_around_subject',float:'position_y',zoom:'distance_scale'})[a.type],from:a.type==='rotate'?0:(a.type==='float'?0:1),to:a.type==='rotate'?(a.degrees||degrees):(a.type==='float'?.28:.82),easing:'ease_in_out'}));
-    spec.interpretation={motion_type:type,rotation_degrees:degrees,duration_seconds:duration,parsing:'local_rules',confidence:(hasCamera||hasRotate||hasFloat)?'rule_matched':'controls_only'};
-    spec.interpretation_note='Local rule-based interpretation: review the inferred motion type and values before exporting. The free-text prompt is not a full natural-language animation model.';
-    motion={type,rotation_degrees:degrees,spec};
-    specNode.textContent=JSON.stringify(spec,null,2);
-    setStatus('تم تجهيز مخطط الحركة. تم تحليل كلمات الحركة والزوايا المعروفة محليًا؛ راجع نوع الحركة والمدة قبل التشغيل.');
-    document.getElementById('studio3d-progress').style.width='0%';
-  }
-  document.getElementById('studio3d-build').addEventListener('click',buildMotion);
-  document.getElementById('studio3d-play').addEventListener('click',()=>{
-    if(!renderer)initScene();
-    if(!motion)buildMotion();
-    resetMotion();buildMotion();playing=true;startAt=performance.now();document.getElementById('studio3d-play').textContent='⏵ تشغيل...';setStatus('تعمل المعاينة وفق مخطط الحركة الحالي.');
+  $('studio3d-add-demo').addEventListener('click',()=>{if(!renderer)initScene();const i=objects.length;addObject({name:'كرة ذهبية '+(i+1),shape:'sphere',color:'#f5c451',x:(i%4-1.5)*2,z:Math.floor(i/4)*2});status('تمت إضافة جسم تجريبي جديد.');});
+  $('studio3d-save-motion').addEventListener('click',saveSelectedMotion);
+  $('studio3d-clear-motion').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;item.motion={type:'rotate',duration:3,degrees:0,prompt:'بدون حركة'};$('studio3d-motion-degrees').value=0;updateSpec();loadSelected();status('تمت إزالة الحركة الفعلية للجسم.');});
+  $('studio3d-duplicate').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;const clone=item.root.clone(true);clone.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();if(o.material)o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();}});addObject({name:item.name+' نسخة',shape:item.shape,color:item.color,x:item.root.position.x+1.5,z:item.root.position.z+1.5,root:clone});});
+  $('studio3d-delete').addEventListener('click',()=>removeObject(selectedId));
+  $('studio3d-play').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){status('أضف جسمًا واحدًا على الأقل أولًا.');return;}objects.forEach(o=>{o.baseX=o.root.position.x;o.baseZ=o.root.position.z;});duration=Math.max(...objects.map(o=>Number(o.motion.duration)||3),1);playing=true;startAt=performance.now();$('studio3d-state').textContent='يعمل';status('تشغيل الحركات المستقلة لكل الأجسام.');});
+  $('studio3d-stop').addEventListener('click',()=>{playing=false;objects.forEach(o=>{o.root.rotation.set(0,0,0);o.root.position.y=0;o.root.scale.setScalar(1);if(o.baseX!==undefined)o.root.position.x=o.baseX;if(o.baseZ!==undefined)o.root.position.z=o.baseZ;});$('studio3d-state').textContent='متوقف';});
+  $('studio3d-home').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){controls.target.set(0,1,0);camera.position.set(7,5.5,9);}else{const box=new THREE.Box3();objects.forEach(o=>box.expandByObject(o.root));const center=box.getCenter(new THREE.Vector3());controls.target.copy(center);camera.position.set(center.x+7,center.y+5,center.z+9);}controls.update();});
+  $('studio3d-file').addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;if(!renderer)initScene();
+    if(file.size>100*1024*1024){status('حجم الملف أكبر من 100MB.');e.target.value='';return;}
+    const url=URL.createObjectURL(file);status('جارٍ تحميل المجسم...');
+    try{const gltf=await new GLTFLoader().loadAsync(url),root=gltf.scene;const box=new THREE.Box3().setFromObject(root),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());root.position.sub(center);const scale=2.5/(Math.max(size.x,size.y,size.z)||1);root.scale.multiplyScalar(scale);addObject({name:file.name,shape:'imported',color:'#b0b0b0',x:(objects.length%4-1.5)*2,z:Math.floor(objects.length/4)*2,root});status('تم استيراد المجسم كجسم مستقل.');}
+    catch(err){status('تعذر تحميل الملف. جرّب GLB مدمجًا. '+(err?.message||''));}finally{URL.revokeObjectURL(url);e.target.value='';}
   });
-  document.getElementById('studio3d-reset').addEventListener('click',()=>{resetMotion();setStatus('تمت إعادة ضبط المشهد.');});
-  let mediaRecorder=null,recordedChunks=[];
-  document.getElementById('studio3d-record').addEventListener('click',()=>{
-    if(!renderer)initScene();
-    if(!renderer.domElement.captureStream || !window.MediaRecorder){setStatus('تسجيل الفيديو غير مدعوم في هذا المتصفح.');return;}
-    try{
-      recordedChunks=[];
-      const stream=renderer.domElement.captureStream(30);
-      const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
-      mediaRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
-      mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data);};
-      mediaRecorder.onstop=()=>{
-        const blob=new Blob(recordedChunks,{type:mediaRecorder.mimeType||'video/webm'});
-        downloadBlob(blob,'content-factory-animation.webm');
-        stream.getTracks().forEach(t=>t.stop());
-        setStatus('تم تنزيل التسجيل بصيغة WebM. جودة التسجيل تعتمد على المتصفح والجهاز.');
-        document.getElementById('studio3d-record').disabled=false;
-        document.getElementById('studio3d-stop-record').disabled=true;
-      };
-      mediaRecorder.start();document.getElementById('studio3d-record').disabled=true;document.getElementById('studio3d-stop-record').disabled=false;
-      setStatus('التسجيل جارٍ. شغّل الحركة الآن ثم أوقف التسجيل عند الانتهاء.');
-    }catch(err){setStatus('تعذر بدء التسجيل: '+(err?.message||'خطأ غير معروف'));}
-  });
-  document.getElementById('studio3d-stop-record').addEventListener('click',()=>{if(mediaRecorder&&mediaRecorder.state!=='inactive')mediaRecorder.stop();});
-  document.getElementById('studio3d-file').addEventListener('change',async e=>{
-    const file=e.target.files?.[0];if(!file)return;
-    if(!renderer)initScene();
-    if(file.size>100*1024*1024){setStatus('حجم الملف أكبر من 100MB. اختر ملفًا أصغر لتجنب تجمد المتصفح.');e.target.value='';return;}
-    setStatus('جارٍ تحميل المجسم...');
-    try {
-      let url;
-      if(file.name.toLowerCase().endsWith('.gltf')){url=URL.createObjectURL(file);setStatus('ملفات GLTF ذات الخامات الخارجية قد لا تظهر كاملة. استخدم GLB مدمجًا إن أمكن.');}
-      else url=URL.createObjectURL(file);
-      const gltf=await new GLTFLoader().loadAsync(url);
-      if(importedRoot){scene.remove(importedRoot);disposeTree(importedRoot);}
-      if(product){scene.remove(product);disposeTree(product);product=null;}
-      importedRoot=gltf.scene;
-      const box=new THREE.Box3().setFromObject(importedRoot), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
-      importedRoot.position.sub(center);
-      const maxDim=Math.max(size.x,size.y,size.z)||1;importedRoot.scale.multiplyScalar(3/maxDim);importedRoot.position.y=1;
-      scene.add(importedRoot);
-      controls.target.set(0,1,0);controls.update();
-      document.getElementById('studio3d-object-label').textContent=file.name;
-      setStatus('تم تحميل المجسم بنجاح. ملاحظة: ملفات GLTF التي تعتمد على ملفات خارجية قد تحتاج إلى تحويلها إلى GLB.');
-      URL.revokeObjectURL(url);
-    } catch(err) {setStatus('تعذر تحميل الملف: '+(err?.message||'صيغة غير مدعومة'));} 
-  });
-  document.getElementById('studio3d-export-spec').addEventListener('click',()=>{
-    if(!motion)buildMotion();
-    const blob=new Blob([JSON.stringify(motion.spec,null,2)],{type:'application/json'});
-    downloadBlob(blob,'content-factory-motion.json');
-  });
-  document.getElementById('studio3d-export').addEventListener('click',()=>{
-    if(!renderer)initScene();
-    setStatus('جارٍ تجهيز ملف GLB...');
-    new GLTFExporter().parse(importedRoot||product,result=>{
-      const blob=result instanceof ArrayBuffer?new Blob([result],{type:'model/gltf-binary'}):new Blob([JSON.stringify(result)],{type:'model/gltf+json'});
-      downloadBlob(blob,'content-factory-scene.glb');
-      setStatus('تم تصدير المجسم والخامات المدعومة. بيانات الحركة تُنزّل بشكل منفصل من زر JSON.');
-    },err=>setStatus('تعذر التصدير: '+(err?.message||'حدث خطأ')), {binary:true,onlyVisible:true});
-  });
-  function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  $('studio3d-export-json').addEventListener('click',()=>{updateSpec();download(new Blob([JSON.stringify(JSON.parse($('studio3d-spec').textContent),null,2)],{type:'application/json'}),'content-factory-scene.json');});
+  $('studio3d-export').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){status('أضف أجسامًا قبل التصدير.');return;}status('جارٍ تصدير المشهد...');new GLTFExporter().parse(scene,result=>{const blob=result instanceof ArrayBuffer?new Blob([result],{type:'model/gltf-binary'}):new Blob([JSON.stringify(result)],{type:'model/gltf+json'});download(blob,'content-factory-scene.glb');status('تم تصدير المشهد. الحركات تُحفظ في ملف JSON منفصل.');},err=>status('فشل التصدير: '+(err?.message||'خطأ غير معروف')),{binary:true,onlyVisible:true});});
+  function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1200);}
+  // Start with a visible object so the first visit is never an empty preview.
+  initScene();addObject({name:'زجاجة تجريبية',shape:'bottle',color:'#48b9d0',x:0,z:0});addObject({name:'كرة ذهبية',shape:'sphere',color:'#f5c451',x:2.2,z:0});selectedId=objects[0].id;renderObjectList();loadSelected();updateSpec();
 })();
