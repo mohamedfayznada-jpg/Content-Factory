@@ -9,11 +9,13 @@ module.exports = async function handler(req, res) {
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 1800) : "";
   if (prompt.length < 3) return res.status(400).json({ error: "اكتب وصفًا واضحًا للصورة." });
   const ratio = ["1:1","16:9","9:16","4:5","3:2"].includes(body.ratio) ? body.ratio : "1:1";
+  const allowedModels = new Set(["tongyi-mai/z-image-turbo","black-forest-labs/flux.1-schnell","google/gemini-3.1-flash-image","bytedance/seedream-5.0-lite","ideogram-ai/ideogram-v4-turbo"]);
+  const model = typeof body.model === "string" && allowedModels.has(body.model) ? body.model : "black-forest-labs/flux.1-schnell";
   const dimensions = { "1:1":[1024,1024], "16:9":[1280,720], "9:16":[720,1280], "4:5":[896,1120], "3:2":[1152,768] };
   const [width,height] = dimensions[ratio];
   try {
     const url = new URL("https://gen.pollinations.ai/image/" + encodeURIComponent(prompt));
-    url.searchParams.set("model", "zimage");
+    url.searchParams.set("model", model);
     url.searchParams.set("width", String(width));
     url.searchParams.set("height", String(height));
     url.searchParams.set("nologo", "true");
@@ -26,7 +28,7 @@ module.exports = async function handler(req, res) {
     if (!contentType.startsWith("image/")) return res.status(502).json({ error: "المزوّد لم يرجع ملف صورة صالحًا." });
     const bytes = Buffer.from(await upstream.arrayBuffer());
     if (bytes.length > 8 * 1024 * 1024) return res.status(502).json({ error: "الصورة أكبر من الحد المسموح." });
-    return res.status(200).json({ image: "data:" + contentType + ";base64," + bytes.toString("base64"), model: "zimage", provider: "Pollinations" });
+    return res.status(200).json({ image: "data:" + contentType + ";base64," + bytes.toString("base64"), model, provider: "Pollinations" });
   } catch (e) {
     return res.status(500).json({ error: "حصل خطأ أثناء توليد الصورة. حاول مرة أخرى.", code: "IMAGE_SERVER_ERROR" });
   }
