@@ -308,16 +308,19 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     const dm=p.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);
     if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
     // Prefer an explicit action described in the prompt over a stale dropdown choice.
-    if(/طفو|يطفو|يرتفع|ينخفض|فوق وتحت|لأعلى وأسفل|float|hover|up and down/.test(p))type='float';
-    else if(/مدار|مسار دائري|دائرة|orbit|circle/.test(p))type='orbit';
-    else if(/نبض|تكبير وتصغير|يكبر ويصغر|pulse|scale|zoom in and out/.test(p))type='pulse';
-    else if(/لف|دوران|يدور|استدر|rotate|spin|turn/.test(p))type='rotate';
-    else if(/تحرك|يتحرك|انتقل|للأمام|الى الأمام|إلى الأمام|قدام|للخلف|يمين|يسار|يمين وشمال|move|slide|forward|backward|left|right/.test(p))type='move';
-    const axis=/يمين وشمال|يمين ويسار|right and left|left and right|sway/.test(p)?'x':(/للأمام|الى الأمام|إلى الأمام|قدام|للخلف|forward|backward/.test(p)?'z':'x');
+    const hasVertical=/لفوق|لأعلى|فوق|لتحت|لأسفل|تحت|يرتفع|ينخفض|طفو|يطفو|up and down|upward|downward|float|hover/.test(p);
+    const hasHorizontal=/يمين|يسار|شمال|للأمام|الى الأمام|إلى الأمام|قدام|للخلف|للوراء|forward|backward|left|right|move|slide|تحرك|يتحرك|انتقل/.test(p);
+    if(hasVertical && hasHorizontal)type='move';
+    else if(hasVertical)type='float';
+    else if(/مدار|مسار دائري|دوران في دائرة|orbit|circle/.test(p))type='orbit';
+    else if(/نبض|تكبير وتصغير|يكبر ويصغر|pulse|zoom in and out/.test(p))type='pulse';
+    else if(/لف الجسم|لف حول|دوران|يدور|استدر|rotate|spin|turn/.test(p))type='rotate';
+    else if(hasHorizontal)type='move';
+    const axis=hasVertical&&hasHorizontal?'xy':hasVertical?'y':(/للأمام|الى الأمام|إلى الأمام|قدام|للخلف|للوراء|forward|backward/.test(p)?'z':'x');
     const direction= /للخلف|backward/.test(p)?-1:1;
     const distanceMatch=p.match(/(\d+(?:[.,]\d+)?)\s*(?:متر|مترات|unit|units)/i);
     const distance=distanceMatch?Math.max(.1,Math.min(20,Number(distanceMatch[1].replace(',','.')))):2;
-    return {type,duration,degrees,prompt:prompt||type,start:0,end:duration,axis,direction,distance};
+    return {type,duration,degrees,prompt:prompt||type,start:0,end:duration,axis,direction,distance,vertical:hasVertical,horizontal:hasHorizontal};
   }
   function normalizeActionSequence(item){
     const actions=item.motion.actions||[];
@@ -388,12 +391,12 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
         if(seconds<start)continue;
         const complete=seconds>=start+dur;
         if(action.type==='rotate')rotY+=(Number(action.degrees)||0)*Math.PI/180*ease;
-        else if(action.type==='float')y+=complete?0:Math.sin(raw*Math.PI*2)*.35;
+        else if(action.type==='float')y+=complete?0:Math.sin(raw*Math.PI*2)*.65;
         else if(action.type==='orbit'){const angle=ease*Math.PI*2; x+=(Number(action.direction)||1)*Math.cos(angle)*1.2;z+=Math.sin(angle)*1.2;rotY+=angle;}
         else if(action.type==='move'){
           const distance=Number(action.distance)||2,dir=Number(action.direction)||1,axis=action.axis||'x';
           const delta=complete?distance:distance*Math.sin(ease*Math.PI/2);
-          if(axis==='z')z+=dir*delta;else x+=dir*delta;
+          if(axis==='z')z+=dir*delta;else if(axis==='y')y+=complete?0:Math.sin(raw*Math.PI*2)*.65;else if(axis==='xy'){x+=complete?0:Math.sin(raw*Math.PI*2)*1.2;y+=complete?0:Math.sin(raw*Math.PI*2+Math.PI/2)*.65;}else x+=dir*delta;
         } else if(action.type==='pulse')scale*=1+.25*Math.sin(raw*Math.PI*4);
       }
       root.position.set(x,y,z);root.rotation.set(0,rotY,0);root.scale.setScalar(scale);
