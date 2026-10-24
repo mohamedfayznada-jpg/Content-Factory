@@ -88,33 +88,84 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     resize();window.addEventListener('resize',resize);animate();
   }
   function resize(){if(!renderer)return;const el=$('studio3d-stage');const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
-  function createGeometry(shape,color){
-    const material=mat(color);
+  function createGeometry(shape,color,description=''){
     const group=new THREE.Group();
-    if(shape==='auto')shape='sphere';
-    if(shape==='bottle'){
-      const glass=new THREE.MeshPhysicalMaterial({color,roughness:.2,metalness:.1,clearcoat:1,transmission:.05});
-      const body=new THREE.Mesh(new THREE.CylinderGeometry(.48,.42,1.65,40),glass);body.position.y=.95;group.add(body);
-      const shoulder=new THREE.Mesh(new THREE.SphereGeometry(.42,32,16),glass);shoulder.scale.y=.42;shoulder.position.y=1.78;group.add(shoulder);
-      const neck=new THREE.Mesh(new THREE.CylinderGeometry(.17,.2,.28,32),glass);neck.position.y=2.03;group.add(neck);
-      const cap=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.22,32),mat('#f5c451'));cap.position.y=2.28;group.add(cap);
+    const p=description.toLowerCase();
+    const material=(c=color,roughness=.38,metalness=.12)=>new THREE.MeshStandardMaterial({color:c,roughness,metalness});
+    const mesh=(geometry,c=color,opts={})=>new THREE.Mesh(geometry,material(c,opts.roughness??.38,opts.metalness??.12));
+    const place=(obj,x,y,z)=>{obj.position.set(x,y,z);group.add(obj);return obj;};
+    if(shape==='auto')shape=inferShape(description,'auto');
+    if(shape==='bottle'||shape==='cup'){
+      const bodyMat=new THREE.MeshPhysicalMaterial({color,roughness:shape==='cup'?.3:.2,metalness:.08,clearcoat:.8,transmission:.04});
+      if(shape==='bottle'){
+        place(new THREE.Mesh(new THREE.CylinderGeometry(.42,.36,1.55,40),bodyMat),0,.88,0);
+        const shoulder=place(new THREE.Mesh(new THREE.SphereGeometry(.37,32,18),bodyMat),0,1.66,0);shoulder.scale.y=.42;
+        place(new THREE.Mesh(new THREE.CylinderGeometry(.14,.17,.28,32),bodyMat),0,1.88,0);
+        place(mesh(new THREE.CylinderGeometry(.18,.18,.2,32),'#f5c451'),0,2.12,0);
+      } else {
+        place(new THREE.Mesh(new THREE.CylinderGeometry(.48,.34,1.0,40,true),bodyMat),0,.55,0);
+        place(mesh(new THREE.TorusGeometry(.42,.055,12,40),color),0,1.05,0);
+        place(mesh(new THREE.CylinderGeometry(.35,.35,.06,40),color),0,.08,0);
+      }
+    } else if(shape==='car'){
+      place(mesh(new THREE.BoxGeometry(2.2,.55,1.05),color,{metalness:.25}),0,.58,0);
+      place(mesh(new THREE.BoxGeometry(1.15,.48,.88),'#9bd9ed',{metalness:.05,roughness:.18}),-.12,1.03,0);
+      for(const x of [-.72,.72])for(const z of [-.57,.57]){
+        const w=mesh(new THREE.CylinderGeometry(.25,.25,.16,24),'#202127',{roughness:.85});w.rotation.x=Math.PI/2;place(w,x,.32,z);
+        const hub=mesh(new THREE.CylinderGeometry(.11,.11,.17,20),'#b9c0c9',{metalness:.65});hub.rotation.x=Math.PI/2;place(hub,x,.32,z);
+      }
+      for(const z of [-.36,.36])place(mesh(new THREE.BoxGeometry(.12,.12,.05),'#ffe7a3'),1.12,.62,z);
+    } else if(shape==='tree'){
+      place(mesh(new THREE.CylinderGeometry(.16,.22,1.25,16),'#79502f'),0,.63,0);
+      const leafColor=/خريف|autumn/.test(p)?'#b85d28':'#2f9b55';
+      place(mesh(new THREE.ConeGeometry(.78,1.2,24),leafColor),0,1.55,0);
+      place(mesh(new THREE.ConeGeometry(.58,1.0,24,1),leafColor),0,2.15,0);
+    } else if(shape==='house'){
+      place(mesh(new THREE.BoxGeometry(1.6,1.2,1.35),color),0,.68,0);
+      const roof=mesh(new THREE.ConeGeometry(1.18,.72,4),'#a5483b');roof.rotation.y=Math.PI/4;place(roof,0,1.64,0);
+      place(mesh(new THREE.BoxGeometry(.34,.62,.06),'#6b4029'),0,.38,.71);
+      for(const x of [-.48,.48])place(mesh(new THREE.BoxGeometry(.28,.28,.05),'#9bd9ed'),x,.85,.71);
+    } else if(shape==='table'){
+      place(mesh(new THREE.BoxGeometry(1.8,.16,1.15),color),0,.95,0);
+      for(const x of [-.72,.72])for(const z of [-.42,.42])place(mesh(new THREE.BoxGeometry(.13,.9,.13),color),x,.45,z);
+    } else if(shape==='chair'){
+      place(mesh(new THREE.BoxGeometry(.95,.14,.9),color),0,.65,0);
+      place(mesh(new THREE.BoxGeometry(.95,.9,.13),color),0,1.12,-.39);
+      for(const x of [-.36,.36])for(const z of [-.32,.32])place(mesh(new THREE.BoxGeometry(.12,.62,.12),color),x,.31,z);
+    } else if(shape==='phone'){
+      const body=place(mesh(new THREE.BoxGeometry(.72,1.35,.09),color,{metalness:.35}),0,.75,0);body.rotation.x=0;
+      place(mesh(new THREE.BoxGeometry(.62,1.12,.025),'#171923',{roughness:.15}),0,.77,.058);
+      place(mesh(new THREE.CircleGeometry(.045,20),'#bfc6d1'),0,.13,.078);
+    } else if(shape==='rocket'){
+      place(mesh(new THREE.CylinderGeometry(.28,.34,1.35,32),'#d9e0e8',{metalness:.3}),0,.85,0);
+      const nose=place(mesh(new THREE.ConeGeometry(.28,.55,32),'#e75a4f'),0,1.8,0);
+      place(mesh(new THREE.ConeGeometry(.18,.5,24),'#ff9d37'),0,.08,0);
+      for(const x of [-.28,.28]){const fin=mesh(new THREE.BoxGeometry(.12,.42,.18),'#e75a4f');fin.rotation.z=x<0?-.35:.35;place(fin,x,.43,0);}
     } else {
-      let mesh;
-      if(shape==='sphere')mesh=new THREE.Mesh(new THREE.SphereGeometry(.72,40,28),material);
-      else if(shape==='box')mesh=new THREE.Mesh(new THREE.BoxGeometry(1.25,1.25,1.25),material);
-      else if(shape==='cone')mesh=new THREE.Mesh(new THREE.ConeGeometry(.72,1.6,40),material);
-      else if(shape==='cylinder')mesh=new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,1.5,40),material);
-      else if(shape==='torus')mesh=new THREE.Mesh(new THREE.TorusGeometry(.62,.22,18,48),material);
-      else if(shape==='capsule')mesh=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.8,8,24),material);
-      else mesh=new THREE.Mesh(new THREE.SphereGeometry(.72,40,28),material);
-      mesh.position.y=shape==='torus'?.85:(shape==='box'?.7:(shape==='cone'?.8:(shape==='cylinder'?.75:(shape==='capsule'?.85:.72))));group.add(mesh);
+      let obj;
+      if(shape==='sphere')obj=mesh(new THREE.SphereGeometry(.72,40,28),color);
+      else if(shape==='box')obj=mesh(new THREE.BoxGeometry(1.25,1.25,1.25),color);
+      else if(shape==='cone')obj=mesh(new THREE.ConeGeometry(.72,1.6,40),color);
+      else if(shape==='cylinder')obj=mesh(new THREE.CylinderGeometry(.6,.6,1.5,40),color);
+      else if(shape==='torus')obj=mesh(new THREE.TorusGeometry(.62,.22,18,48),color);
+      else if(shape==='capsule')obj=mesh(new THREE.CapsuleGeometry(.42,.8,8,24),color);
+      else obj=mesh(new THREE.SphereGeometry(.72,40,28),color);
+      obj.position.y=shape==='torus'?.85:(shape==='box'?.7:(shape==='cone'?.8:(shape==='cylinder'?.75:(shape==='capsule'?.85:.72))));group.add(obj);
     }
     return group;
   }
   function inferShape(text,chosen){
-    if(chosen!=='auto')return chosen;
+    if(chosen&&chosen!=='auto')return chosen;
     const p=text.toLowerCase();
-    if(/زجاجة|قارورة|bottle|water/.test(p))return 'bottle';
+    if(/سيارة|عربية|عربه|car|automobile|vehicle/.test(p))return 'car';
+    if(/شجرة|شجره|tree|نخلة|نخله/.test(p))return 'tree';
+    if(/بيت|منزل|house|home|كوخ|cabin/.test(p))return 'house';
+    if(/ترابيزة|طاولة|table|مكتب/.test(p))return 'table';
+    if(/كرسي|chair|مقعد/.test(p))return 'chair';
+    if(/موبايل|هاتف|تليفون|phone|smartphone/.test(p))return 'phone';
+    if(/صاروخ|rocket/.test(p))return 'rocket';
+    if(/زجاجة|قارورة|bottle|water bottle/.test(p))return 'bottle';
+    if(/كوب|مج|فنجان|mug|cup/.test(p))return 'cup';
     if(/صندوق|مكعب|box|cube/.test(p))return 'box';
     if(/مخروط|cone/.test(p))return 'cone';
     if(/اسطوانة|أسطوانة|cylinder/.test(p))return 'cylinder';
@@ -122,9 +173,19 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     if(/كبسولة|capsule/.test(p))return 'capsule';
     return 'sphere';
   }
-  function addObject({name,shape='sphere',color='#48b9d0',x=0,z=0,root=null}={}){
+  function inferColor(text,fallback){
+    const p=text.toLowerCase();
+    const colors=[
+      [/أحمر|حمراء|حمرا|red/,'#e34242'],[/أزرق|زرقاء|زرقا|blue/,'#318ce7'],[/أخضر|خضراء|خضرا|green/,'#2fa66a'],
+      [/أصفر|صفراء|صفرا|yellow/,'#f5c451'],[/أسود|سوداء|سودا|black/,'#25252b'],[/أبيض|بيضاء|بيضا|white/,'#f4f0e8'],
+      [/بنفسجي|موف|purple|violet/,'#8c61c9'],[/وردي|زهري|pink/,'#e978a7'],[/برتقالي|orange/,'#f08a35'],
+      [/بني|بنية|brown/,'#865b3c'],[/رمادي|gray|grey/,'#9297a1'],[/ذهبي|ذهبية|gold/,'#d9a72e'],[/فضي|فضية|silver/,'#bfc6d1']
+    ];
+    const found=colors.find(([re])=>re.test(p));return found?found[1]:fallback;
+  }
+    function addObject({name,shape='sphere',color='#48b9d0',x=0,z=0,root=null,description=''}={}){
     if(objects.length>=30){status('الحد الأقصى 30 جسمًا في المشهد.');return null;}
-    const id=nextId++,objectRoot=root||createGeometry(shape,color);
+    const id=nextId++,objectRoot=root||createGeometry(shape,color,description||name||'');
     objectRoot.position.set(x,0,z);objectRoot.userData.objectId=id;scene.add(objectRoot);
     const item={id,name:name||('جسم '+id),shape,color,root:objectRoot,motion:{type:'rotate',duration:3,degrees:180,prompt:'لف الجسم 180 درجة خلال 3 ثوانٍ'}};
     objects.push(item);selectedId=id;renderObjectList();loadSelected();updateSpec();focusObject(item);return item;
@@ -189,8 +250,8 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     $('studio3d-spec').textContent=JSON.stringify(spec,null,2);
   }
   $('studio3d-create').addEventListener('click',()=>{
-    if(!renderer)initScene();const prompt=$('studio3d-object-prompt').value.trim()||'جسم جديد',shape=inferShape(prompt,$('studio3d-shape').value),color=$('studio3d-color').value;
-    const item=addObject({name:prompt.slice(0,32),shape,color,x:(objects.length%4-1.5)*2,z:Math.floor(objects.length/4)*2});
+    if(!renderer)initScene();const prompt=$('studio3d-object-prompt').value.trim()||'جسم جديد',shape=inferShape(prompt,$('studio3d-shape').value),manualColor=$('studio3d-color').value,color=manualColor==='#48b9d0'?inferColor(prompt,manualColor):manualColor;
+    const item=addObject({name:prompt.slice(0,32),shape,color,description:prompt,x:(objects.length%4-1.5)*2,z:Math.floor(objects.length/4)*2});
     if(item)status('تم إنشاء '+item.name+' داخل المشهد. اختر الجسم لتخصيص حركته.');
   });
   $('studio3d-add-demo').addEventListener('click',()=>{if(!renderer)initScene();const i=objects.length;addObject({name:'كرة ذهبية '+(i+1),shape:'sphere',color:'#f5c451',x:(i%4-1.5)*2,z:Math.floor(i/4)*2});status('تمت إضافة جسم تجريبي جديد.');});
