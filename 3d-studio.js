@@ -22,6 +22,9 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
   .studio3d-field textarea{min-height:95px}
   .studio3d-spec{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-height:260px;background:#1a0f12;color:#f9e6d1;border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,monospace}
   .studio3d-status{font-size:12px;color:#6f7785;line-height:1.8;margin-top:8px}
+  .studio3d-action-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;padding:9px;border:1px solid #e8ded7;border-radius:10px;margin:8px 0;background:#fffaf6}
+  .studio3d-action-row select,.studio3d-action-row input{min-width:0;width:100%;border:1px solid #ded3cc;border-radius:8px;padding:7px;background:#fff;font:inherit}
+  .studio3d-action-row button{border:0;border-radius:8px;padding:7px 10px;background:#fbe3e7;color:#881e3f}
   @media(max-width:850px){.studio3d-grid{grid-template-columns:1fr}.studio3d-stage,.studio3d-stage canvas{min-height:320px;height:320px}}
   `;
   document.head.appendChild(style);
@@ -64,8 +67,10 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
           <div class="studio3d-field"><label for="studio3d-duration">مدة الحركة (ثوانٍ)</label><input id="studio3d-duration" type="number" min="1" max="60" step="0.5" value="3"></div>
           <div class="studio3d-field"><label for="studio3d-motion">نوع الحركة</label><select id="studio3d-motion"><option value="rotate">دوران حول المحور الرأسي</option><option value="orbit">حركة كاميرا حول المجسم</option><option value="float">ارتفاع وانخفاض ناعم</option><option value="product">دوران منتج مع اقتراب الكاميرا</option></select></div>
           <div class="studio3d-field"><label for="studio3d-degrees">زاوية الدوران</label><input id="studio3d-degrees" type="number" min="-720" max="720" step="15" value="180"></div>
-          <div class="studio3d-actions"><button class="btn primary" id="studio3d-build">تحليل الوصف وتجهيز الحركة</button></div>
-          <p class="studio3d-note">المخطط الحالي يستخدم قواعد واضحة داخل المتصفح، وليس نموذجًا لغويًا. راجع البيانات الناتجة قبل استخدامها في مشروع إنتاج.</p>
+          <div class="studio3d-actions"><button class="btn primary" id="studio3d-build">تحليل الوصف وتجهيز الحركة</button><button class="btn" id="studio3d-add-action">+ إضافة حركة</button></div>
+          <div id="studio3d-actions-list" class="studio3d-action-list"></div>
+          <div class="studio3d-actions"><button class="btn" id="studio3d-record">● تسجيل فيديو WebM</button><button class="btn" id="studio3d-stop-record" disabled>إيقاف التسجيل</button></div>
+          <p class="studio3d-note">التحليل المحلي يستخرج المدة والزوايا وأنواع الحركة الشائعة. التسجيل يعتمد على دعم المتصفح لـ MediaRecorder وقد ينتج WebM، وليس MP4.</p>
         </section>
         <section class="card">
           <div class="head"><h2>بيانات الحركة</h2></div>
@@ -183,9 +188,40 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
     document.getElementById('studio3d-run-label').textContent='جاهز';
     document.getElementById('studio3d-play').textContent='▶ تشغيل الحركة';
   }
+  let customActions = [];
+  function renderCustomActions() {
+    const host=document.getElementById('studio3d-actions-list');
+    if(!host)return;
+    host.innerHTML='';
+    customActions.forEach((a,i)=>{
+      const row=document.createElement('div');row.className='studio3d-action-row';
+      const kind=document.createElement('select');
+      [['rotate','دوران المجسم'],['orbit','حركة الكاميرا'],['float','طفو المجسم'],['zoom','اقتراب الكاميرا']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;kind.appendChild(o);});
+      kind.value=a.type;kind.setAttribute('aria-label','نوع الحركة');
+      const start=document.createElement('input');start.type='number';start.min='0';start.max='60';start.step='.25';start.value=a.start;start.title='بداية الحركة بالثواني';
+      const end=document.createElement('input');end.type='number';end.min='.25';end.max='60';end.step='.25';end.value=a.end;end.title='نهاية الحركة بالثواني';
+      const del=document.createElement('button');del.type='button';del.textContent='حذف';
+      kind.onchange=()=>{a.type=kind.value;};
+      start.onchange=()=>{a.start=Math.max(0,Math.min(duration,Number(start.value)||0));if(a.end<=a.start)a.end=Math.min(duration,a.start+.25);start.value=a.start;end.value=a.end;};
+      end.onchange=()=>{a.end=Math.max(a.start+.25,Math.min(60,Number(end.value)||a.start+1));end.value=a.end;};
+      del.onclick=()=>{customActions.splice(i,1);renderCustomActions();};
+      row.append(kind,start,end,del);host.appendChild(row);
+    });
+  }
+  document.getElementById('studio3d-add-action').addEventListener('click',()=>{
+    if(customActions.length>=12){setStatus('الحد الأقصى 12 حركة في هذا المخطط.');return;}
+    const start=customActions.length?customActions[customActions.length-1].end:0;
+    customActions.push({type:'rotate',start:Math.min(start,59),end:Math.min(60,Math.min(start,59)+1),degrees:180});
+    renderCustomActions();
+  });
+  function parseSeconds(text,fallback){
+    const m=text.match(/(\\d+(?:[.,]\\d+)?)\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)\\b?/i);
+    return m?Math.max(.25,Math.min(60,Number(m[1].replace(',','.')))):fallback;
+  }
   function buildMotion() {
     const prompt=document.getElementById('studio3d-prompt').value.trim();
     duration=Math.max(1,Math.min(60,Number(document.getElementById('studio3d-duration').value)||3));
+    if(prompt && !Number(document.getElementById('studio3d-duration').value)) duration=parseSeconds(prompt,3);
     let type=document.getElementById('studio3d-motion').value;
     let degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
     // Lightweight bilingual intent parsing. It is deterministic and never sends prompt text to a remote service.
@@ -209,6 +245,8 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
     if(type==='rotate'||type==='product') spec.actions.push({start_seconds:0,end_seconds:type==='product'?duration*.66:duration,target:'subject',property:'rotation_y_degrees',from:0,to:degrees,easing:'ease_in_out'});
     if(type==='orbit'||type==='product') spec.actions.push({start_seconds:type==='product'?duration*.45:0,end_seconds:duration,target:'camera',property:'orbit_around_subject',direction:'clockwise',easing:'ease_in_out'});
     if(type==='float') spec.actions.push({start_seconds:0,end_seconds:duration,target:'subject',property:'position_y',from:0,to:.28,curve:'sine_wave',cycles:1});
+    if(type==='product' && hasZoom) spec.actions.push({start_seconds:duration*.45,end_seconds:duration,target:'camera',property:'distance_scale',from:1,to:.82,easing:'ease_in_out'});
+    customActions.forEach(a=>spec.actions.push({start_seconds:a.start,end_seconds:a.end,target:a.type==='orbit'||a.type==='zoom'?'camera':'subject',property:({rotate:'rotation_y_degrees',orbit:'orbit_around_subject',float:'position_y',zoom:'distance_scale'})[a.type],from:a.type==='rotate'?0:(a.type==='float'?0:1),to:a.type==='rotate'?(a.degrees||degrees):(a.type==='float'?.28:.82),easing:'ease_in_out'}));
     spec.interpretation={motion_type:type,rotation_degrees:degrees,duration_seconds:duration,parsing:'local_rules',confidence:(hasCamera||hasRotate||hasFloat)?'rule_matched':'controls_only'};
     spec.interpretation_note='Local rule-based interpretation: review the inferred motion type and values before exporting. The free-text prompt is not a full natural-language animation model.';
     motion={type,rotation_degrees:degrees,spec};
@@ -223,6 +261,29 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
     resetMotion();buildMotion();playing=true;startAt=performance.now();document.getElementById('studio3d-play').textContent='⏵ تشغيل...';setStatus('تعمل المعاينة وفق مخطط الحركة الحالي.');
   });
   document.getElementById('studio3d-reset').addEventListener('click',()=>{resetMotion();setStatus('تمت إعادة ضبط المشهد.');});
+  let mediaRecorder=null,recordedChunks=[];
+  document.getElementById('studio3d-record').addEventListener('click',()=>{
+    if(!renderer)initScene();
+    if(!renderer.domElement.captureStream || !window.MediaRecorder){setStatus('تسجيل الفيديو غير مدعوم في هذا المتصفح.');return;}
+    try{
+      recordedChunks=[];
+      const stream=renderer.domElement.captureStream(30);
+      const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+      mediaRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
+      mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data);};
+      mediaRecorder.onstop=()=>{
+        const blob=new Blob(recordedChunks,{type:mediaRecorder.mimeType||'video/webm'});
+        downloadBlob(blob,'content-factory-animation.webm');
+        stream.getTracks().forEach(t=>t.stop());
+        setStatus('تم تنزيل التسجيل بصيغة WebM. جودة التسجيل تعتمد على المتصفح والجهاز.');
+        document.getElementById('studio3d-record').disabled=false;
+        document.getElementById('studio3d-stop-record').disabled=true;
+      };
+      mediaRecorder.start();document.getElementById('studio3d-record').disabled=true;document.getElementById('studio3d-stop-record').disabled=false;
+      setStatus('التسجيل جارٍ. شغّل الحركة الآن ثم أوقف التسجيل عند الانتهاء.');
+    }catch(err){setStatus('تعذر بدء التسجيل: '+(err?.message||'خطأ غير معروف'));}
+  });
+  document.getElementById('studio3d-stop-record').addEventListener('click',()=>{if(mediaRecorder&&mediaRecorder.state!=='inactive')mediaRecorder.stop();});
   document.getElementById('studio3d-file').addEventListener('change',async e=>{
     const file=e.target.files?.[0];if(!file)return;
     if(!renderer)initScene();
