@@ -20,7 +20,8 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   .studio3d-field textarea,.studio3d-field input,.studio3d-field select{width:100%;border:1px solid #ded3cc;border-radius:10px;padding:10px;background:#fffdfb;font:inherit;box-sizing:border-box}
   .studio3d-field textarea{min-height:78px}.studio3d-note,.studio3d-status{font-size:12px;line-height:1.8;color:#6f7785}
   .studio3d-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.studio3d-actions .btn{flex:1}
-  .studio3d-object-list{display:grid;gap:6px;margin:10px 0}.studio3d-object-item{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #e8ded7;border-radius:10px;background:#fffaf6}.studio3d-object-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-object-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-object-item .pick{flex:1;text-align:right;background:transparent}.studio3d-object-item .remove{background:#fbe3e7;color:#881e3f}
+  .studio3d-object-list{display:grid;gap:6px;margin:10px 0}
+  .studio3d-timeline-list{display:grid;gap:7px;margin:12px 0}.studio3d-action-item{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid #e8ded7;border-radius:10px;padding:9px;background:#fffaf6}.studio3d-action-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-action-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-action-item .action-pick{text-align:right;background:transparent}.studio3d-action-item .action-delete{background:#fbe3e7;color:#881e3f}.studio3d-object-item{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #e8ded7;border-radius:10px;background:#fffaf6}.studio3d-object-item.active{border-color:#881e3f;background:#fbeef1}.studio3d-object-item button{border:0;border-radius:8px;padding:6px 9px;cursor:pointer}.studio3d-object-item .pick{flex:1;text-align:right;background:transparent}.studio3d-object-item .remove{background:#fbe3e7;color:#881e3f}
   .studio3d-spec{direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;max-height:230px;background:#1a0f12;color:#f9e6d1;border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,monospace}
   @media(max-width:850px){.studio3d-grid{grid-template-columns:1fr}.studio3d-stage{height:350px}}
   `;
@@ -59,8 +60,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     <div class="studio3d-field"><label for="studio3d-motion-type">نوع الحركة</label><select id="studio3d-motion-type"><option value="rotate">دوران الجسم</option><option value="float">طفو لأعلى وأسفل</option><option value="orbit">دوران في مسار دائري</option><option value="move">تحرك من مكانه</option><option value="pulse">تكبير وتصغير</option></select></div>
     <div class="studio3d-field"><label for="studio3d-motion-duration">المدة بالثواني</label><input id="studio3d-motion-duration" type="number" min="0.5" max="60" step="0.5" value="3"></div>
     <div class="studio3d-field"><label for="studio3d-motion-degrees">زاوية الدوران (درجة)</label><input id="studio3d-motion-degrees" type="number" min="-1440" max="1440" step="15" value="180"></div>
-    <div class="studio3d-actions"><button class="btn primary" id="studio3d-save-motion">حفظ حركة الجسم</button><button class="btn" id="studio3d-clear-motion">مسح الحركة</button></div>
-    <div class="studio3d-note" id="studio3d-motion-status">لا توجد حركة محفوظة للجسم المحدد.</div>
+    <div class="studio3d-actions"><button class="btn primary" id="studio3d-save-motion">حفظ / تحديث الحركة المحددة</button><button class="btn" id="studio3d-add-motion">＋ إضافة حركة مركبة</button></div><div class="studio3d-actions"><button class="btn" id="studio3d-clear-motion">مسح كل الحركات</button></div><h3>Timeline الحركات</h3><div class="studio3d-timeline-list" id="studio3d-motion-timeline"></div><div class="studio3d-note" id="studio3d-motion-status">اختَر حركة أو أضف حركة جديدة.</div>
    </section>
    <section class="card"><div class="head"><h2>ملخص المشهد</h2></div><pre class="studio3d-spec" id="studio3d-spec">أضف جسمًا لإنشاء مخطط المشهد.</pre></section>
   </div></div>`;
@@ -70,7 +70,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   navButton.addEventListener('click',openPage);
   document.addEventListener('click',e=>{if(e.target.closest('[data-go="3d-studio"]'))openPage();});
 
-  let renderer,scene,camera,controls,transformControls,raycaster,mouse,raf=0,playing=false,startAt=0,duration=3,selectedId=null,objects=[],nextId=1,activeTool='translate',dragPlane,dragOffset,draggingObject=null,lastPointerX=0,lastPointerY=0;
+  let renderer,scene,camera,controls,transformControls,raycaster,mouse,raf=0,playing=false,startAt=0,duration=3,selectedId=null,objects=[],nextId=1,activeTool='translate',dragPlane,dragOffset,draggingObject=null,lastPointerX=0,lastPointerY=0,selectedActionIndex=0;
   const clock=new THREE.Clock();
   const status=t=>{$('studio3d-status').textContent=t;};
   const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.32,metalness:.18});
@@ -260,7 +260,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     if(objects.length>=30){status('الحد الأقصى 30 جسمًا في المشهد.');return null;}
     const id=nextId++,objectRoot=root||createGeometry(shape,color,description||name||'');
     objectRoot.position.set(x,0,z);objectRoot.userData.objectId=id;scene.add(objectRoot);
-    const item={id,name:name||('جسم '+id),shape,color,root:objectRoot,motion:{type:'rotate',duration:3,degrees:180,prompt:'لف الجسم 180 درجة خلال 3 ثوانٍ'}};
+    const item={id,name:name||('جسم '+id),shape,color,root:objectRoot,motion:{type:'rotate',duration:3,degrees:180,prompt:'لف الجسم 180 درجة خلال 3 ثوانٍ',actions:[]}};
     objects.push(item);selectedId=id;renderObjectList();loadSelected();updateSpec();focusObject(item);if(transformControls&&activeTool!=='select')transformControls.attach(item.root);return item;
   }
   function focusObject(item){if(!item||!camera)return;controls.target.set(item.root.position.x,1,item.root.position.z);controls.update();}
@@ -278,35 +278,86 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   function removeObject(id){const item=objects.find(o=>o.id===id);if(!item)return;if(transformControls&&selectedId===id)transformControls.detach();scene.remove(item.root);dispose(item.root);objects=objects.filter(o=>o.id!==id);selectedId=objects[0]?.id??null;renderObjectList();loadSelected();updateSpec();}
   function loadSelected(){
     const item=objects.find(o=>o.id===selectedId),enabled=!!item;
-    ['studio3d-motion-prompt','studio3d-motion-type','studio3d-motion-duration','studio3d-motion-degrees','studio3d-save-motion','studio3d-clear-motion','studio3d-duplicate','studio3d-delete'].forEach(id=>$(id).disabled=!enabled);
-    if(!item){$('studio3d-motion-status').textContent='أضف أو اختَر جسمًا أولًا.';return;}
-    $('studio3d-motion-prompt').value=item.motion.prompt||'';$('studio3d-motion-type').value=item.motion.type;$('studio3d-motion-duration').value=item.motion.duration;$('studio3d-motion-degrees').value=item.motion.degrees;
-    $('studio3d-motion-status').textContent='الحركة المحفوظة: '+item.motion.type+' · '+item.motion.duration+' ث';
+    ['studio3d-motion-prompt','studio3d-motion-type','studio3d-motion-duration','studio3d-motion-degrees','studio3d-save-motion','studio3d-add-motion','studio3d-clear-motion','studio3d-duplicate','studio3d-delete'].forEach(id=>$(id).disabled=!enabled);
+    if(!item){$('studio3d-motion-status').textContent='أضف أو اختَر جسمًا أولًا.';$('studio3d-motion-timeline').innerHTML='';return;}
+    item.motion.actions ||= [];
+    if(item.motion.actions.length && selectedActionIndex>=item.motion.actions.length)selectedActionIndex=item.motion.actions.length-1;
+    if(item.motion.actions.length)loadActionForm(item.motion.actions[selectedActionIndex]);
+    else {
+      $('studio3d-motion-prompt').value=item.motion.prompt||'';
+      $('studio3d-motion-type').value=item.motion.type||'rotate';
+      $('studio3d-motion-duration').value=item.motion.duration||3;
+      $('studio3d-motion-degrees').value=item.motion.degrees??180;
+    }
+    renderMotionTimeline(item);
+    $('studio3d-motion-status').textContent=item.motion.actions.length?item.motion.actions.length+' حركة محفوظة لهذا الجسم.':'لا توجد حركات محفوظة؛ اضبط الخصائص ثم اضغط حفظ.';
+  }
+  function loadActionForm(action){
+    $('studio3d-motion-prompt').value=action.prompt||'';
+    $('studio3d-motion-type').value=action.type||'rotate';
+    $('studio3d-motion-duration').value=action.duration||3;
+    $('studio3d-motion-degrees').value=action.degrees??180;
+  }
+  function readActionForm(){
+    const prompt=$('studio3d-motion-prompt').value.trim();
+    let type=$('studio3d-motion-type').value;
+    let duration=Math.max(.5,Math.min(60,Number($('studio3d-motion-duration').value)||3));
+    let degrees=Math.max(-1440,Math.min(1440,Number($('studio3d-motion-degrees').value)||0));
+    const tm=prompt.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);
+    if(tm)duration=Math.max(.5,Math.min(60,Number(tm[1].replace(',','.'))));
+    const dm=prompt.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);
+    if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
+    return {type,duration,degrees,prompt:prompt||type,start:0,end:duration};
+  }
+  function renderMotionTimeline(item){
+    const host=$('studio3d-motion-timeline');host.innerHTML='';
+    (item.motion.actions||[]).forEach((action,index)=>{
+      const row=document.createElement('div');row.className='studio3d-action-item'+(index===selectedActionIndex?' active':'');
+      const pick=document.createElement('button');pick.className='action-pick';pick.textContent=(index+1)+'. '+({rotate:'دوران',float:'طفو',orbit:'مدار',move:'تحريك',pulse:'تكبير وتصغير'}[action.type]||action.type)+' · '+action.duration+'ث · تبدأ '+action.start+'ث';
+      pick.onclick=()=>{selectedActionIndex=index;loadActionForm(action);renderMotionTimeline(item);$('studio3d-motion-status').textContent='تعديل الحركة رقم '+(index+1);};
+      const del=document.createElement('button');del.className='action-delete';del.textContent='حذف';del.onclick=()=>{item.motion.actions.splice(index,1);selectedActionIndex=Math.max(0,Math.min(selectedActionIndex,item.motion.actions.length-1));renderMotionTimeline(item);updateSpec();loadSelected();};
+      row.append(pick,del);host.appendChild(row);
+    });
+    if(!(item.motion.actions||[]).length)host.innerHTML='<p class="studio3d-note">الـ Timeline فارغ. اضغط «حفظ» لإضافة أول حركة أو «إضافة حركة مركبة» لإضافة حركة جديدة.</p>';
   }
   function saveSelectedMotion(){
     const item=objects.find(o=>o.id===selectedId);if(!item)return;
-    const prompt=$('studio3d-motion-prompt').value.trim(),p=prompt.toLowerCase();
-    let type=$('studio3d-motion-type').value,duration=Math.max(.5,Math.min(60,Number($('studio3d-motion-duration').value)||3)),degrees=Math.max(-1440,Math.min(1440,Number($('studio3d-motion-degrees').value)||180));
-    const tm=p.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);if(tm)duration=Math.max(.5,Math.min(60,Number(tm[1].replace(',','.'))));
-    const dm=p.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
-    if(/طفو|يطفو|يرتفع|ينخفض|float|hover/.test(p))type='float';
-    else if(/مدار|دائرة|orbit|circle/.test(p))type='orbit';
-    else if(/تحرك|انتقل|move|slide/.test(p))type='move';
-    else if(/نبض|تكبير وتصغير|pulse|scale/.test(p))type='pulse';
-    else if(/لف|دوران|rotate|spin|turn/.test(p))type='rotate';
-    item.motion={type,duration,degrees,prompt:prompt||type};
-    $('studio3d-motion-type').value=type;$('studio3d-motion-duration').value=duration;$('studio3d-motion-degrees').value=degrees;
-    $('studio3d-motion-status').textContent='تم حفظ الحركة لهذا الجسم فقط.';updateSpec();status('حُفظت حركة '+item.name+'. اضغط تشغيل لمعاينة كل حركات المشهد.');
+    const action=readActionForm();item.motion.actions ||= [];
+    if(item.motion.actions.length && selectedActionIndex<item.motion.actions.length){
+      const previous=item.motion.actions[selectedActionIndex];action.start=previous.start||0;item.motion.actions[selectedActionIndex]=action;
+    } else {
+      action.start=item.motion.actions.length?Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1))):0;
+      item.motion.actions.push(action);selectedActionIndex=item.motion.actions.length-1;
+    }
+    item.motion.type=action.type;item.motion.duration=Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1)));
+    item.motion.degrees=action.degrees;item.motion.prompt=action.prompt;
+    $('studio3d-motion-status').textContent='تم حفظ الحركة '+(selectedActionIndex+1)+' كما اخترتها.';
+    renderMotionTimeline(item);updateSpec();status('تم حفظ حركة '+item.name+'. اضغط تشغيل لمعاينة التسلسل المركب.');
+  }
+  function addCompoundMotion(){
+    const item=objects.find(o=>o.id===selectedId);if(!item)return;
+    item.motion.actions ||= [];
+    const action=readActionForm();
+    action.start=item.motion.actions.length?Math.max(...item.motion.actions.map(a=>(Number(a.start)||0)+(Number(a.duration)||1))):0;
+    item.motion.actions.push(action);selectedActionIndex=item.motion.actions.length-1;
+    item.motion.type=action.type;item.motion.duration=action.start+action.duration;item.motion.degrees=action.degrees;item.motion.prompt=action.prompt;
+    loadActionForm(action);renderMotionTimeline(item);updateSpec();
+    $('studio3d-motion-status').textContent='أُضيفت الحركة رقم '+(selectedActionIndex+1)+' عند '+action.start+' ثانية. اضغط حفظ بعد تعديلها.';
   }
   function applySceneTime(seconds){
     for(const item of objects){
-      const m=item.motion||{},t=Math.min(1,seconds/Math.max(.1,m.duration||3)),ease=t*t*(3-2*t),root=item.root;
-      root.rotation.set(0,0,0);root.position.x=item.baseX??root.position.x;root.position.z=item.baseZ??root.position.z;root.scale.setScalar(1);
-      if(m.type==='rotate')root.rotation.y=(Number(m.degrees)||180)*Math.PI/180*ease;
-      if(m.type==='float')root.position.y=Math.sin(t*Math.PI*2)*.35;
-      if(m.type==='orbit'){const a=ease*Math.PI*2;root.position.x=(item.baseX||0)+Math.cos(a)*1.2;root.position.z=(item.baseZ||0)+Math.sin(a)*1.2;root.rotation.y=a;}
-      if(m.type==='move')root.position.x=(item.baseX||0)+Math.sin(ease*Math.PI)*2;
-      if(m.type==='pulse')root.scale.setScalar(1+.25*Math.sin(t*Math.PI*4));
+      const root=item.root,actions=item.motion?.actions||[];
+      const baseX=item.baseX??item.homeX??root.position.x,baseY=item.baseY??item.homeY??root.position.y,baseZ=item.baseZ??item.homeZ??root.position.z;
+      root.rotation.set(0,0,0);root.position.set(baseX,baseY,baseZ);root.scale.setScalar(1);
+      for(const action of actions){
+        const start=Math.max(0,Number(action.start)||0),dur=Math.max(.1,Number(action.duration)||3),t=Math.max(0,Math.min(1,(seconds-start)/dur)),ease=t*t*(3-2*t);
+        if(seconds<start)continue;
+        if(action.type==='rotate')root.rotation.y=(Number(action.degrees)||0)*Math.PI/180*ease;
+        else if(action.type==='float')root.position.y=baseY+(seconds>=start+dur?0:Math.sin(t*Math.PI*2)*.35);
+        else if(action.type==='orbit'){const angle=ease*Math.PI*2;root.position.x=baseX+Math.cos(angle)*1.2;root.position.z=baseZ+Math.sin(angle)*1.2;root.rotation.y=angle;}
+        else if(action.type==='move')root.position.x=baseX+Math.sin(ease*Math.PI)*2;
+        else if(action.type==='pulse')root.scale.setScalar(1+.25*Math.sin(t*Math.PI*4));
+      }
     }
   }
   function animate(){
@@ -320,7 +371,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     controls?.update();renderer?.render(scene,camera);
   }
   function updateSpec(){
-    const spec={schema_version:'1.1',engine:'three.js',scene:{object_count:objects.length,objects:objects.map(o=>({id:o.id,name:o.name,shape:o.shape,color:o.color,position:{x:Number(o.root.position.x.toFixed(3)),y:Number(o.root.position.y.toFixed(3)),z:Number(o.root.position.z.toFixed(3))},motion:o.motion}))}};
+    const spec={schema_version:'1.2',engine:'three.js',scene:{object_count:objects.length,objects:objects.map(o=>({id:o.id,name:o.name,shape:o.shape,color:o.color,position:{x:Number(o.root.position.x.toFixed(3)),y:Number(o.root.position.y.toFixed(3)),z:Number(o.root.position.z.toFixed(3))},motion:o.motion}))}};
     $('studio3d-spec').textContent=JSON.stringify(spec,null,2);
   }
   $('studio3d-tool-move').addEventListener('click',()=>setTool('translate'));
@@ -342,10 +393,10 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   });
   $('studio3d-add-demo').addEventListener('click',()=>{if(!renderer)initScene();const i=objects.length;addObject({name:'كرة ذهبية '+(i+1),shape:'sphere',color:'#f5c451',x:(i%4-1.5)*2,z:Math.floor(i/4)*2});status('تمت إضافة جسم تجريبي جديد.');});
   $('studio3d-save-motion').addEventListener('click',saveSelectedMotion);
-  $('studio3d-clear-motion').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;item.motion={type:'rotate',duration:3,degrees:0,prompt:'بدون حركة'};$('studio3d-motion-degrees').value=0;updateSpec();loadSelected();status('تمت إزالة الحركة الفعلية للجسم.');});
+  $('studio3d-clear-motion').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;item.motion={type:'rotate',duration:3,degrees:0,prompt:'بدون حركة',actions:[]};selectedActionIndex=0;$('studio3d-motion-degrees').value=0;updateSpec();loadSelected();status('تم مسح كل حركات الجسم.');});
   $('studio3d-duplicate').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;const clone=item.root.clone(true);clone.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();if(o.material)o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();}});addObject({name:item.name+' نسخة',shape:item.shape,color:item.color,x:item.root.position.x+1.5,z:item.root.position.z+1.5,root:clone});});
   $('studio3d-delete').addEventListener('click',()=>removeObject(selectedId));
-  $('studio3d-play').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){status('أضف جسمًا واحدًا على الأقل أولًا.');return;}objects.forEach(o=>{o.baseX=o.root.position.x;o.baseZ=o.root.position.z;});duration=Math.max(...objects.map(o=>Number(o.motion.duration)||3),1);playing=true;startAt=performance.now();$('studio3d-state').textContent='يعمل';status('تشغيل الحركات المستقلة لكل الأجسام.');});
+  $('studio3d-play').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){status('أضف جسمًا واحدًا على الأقل أولًا.');return;}objects.forEach(o=>{o.baseX=o.root.position.x;o.baseZ=o.root.position.z;});duration=Math.max(...objects.map(o=>Math.max(Number(o.motion.duration)||0,...(o.motion.actions||[]).map(a=>(Number(a.start)||0)+(Number(a.duration)||1)))),1);playing=true;startAt=performance.now();$('studio3d-state').textContent='يعمل';status('تشغيل الحركات المستقلة لكل الأجسام.');});
   $('studio3d-stop').addEventListener('click',()=>{playing=false;objects.forEach(o=>{o.root.rotation.set(0,0,0);o.root.position.y=0;o.root.scale.setScalar(1);if(o.baseX!==undefined)o.root.position.x=o.baseX;if(o.baseZ!==undefined)o.root.position.z=o.baseZ;});$('studio3d-state').textContent='متوقف';});
   $('studio3d-home').addEventListener('click',()=>{if(!renderer)initScene();if(!objects.length){controls.target.set(0,1,0);camera.position.set(7,5.5,9);}else{const box=new THREE.Box3();objects.forEach(o=>box.expandByObject(o.root));const center=box.getCenter(new THREE.Vector3());controls.target.copy(center);camera.position.set(center.x+7,center.y+5,center.z+9);}controls.update();});
   $('studio3d-file').addEventListener('change',async e=>{
