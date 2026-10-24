@@ -182,7 +182,7 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
   }
   function resetMotion() {
     playing=false;motion=null;
-    const root=importedRoot || product;if(root){root.rotation.set(0,0,0);root.position.y=0;}
+    const root=importedRoot || product;if(root){root.rotation.set(0,0,0);root.position.y=importedRoot?1:0;}
     if(camera){camera.position.set(4.4,3.1,6.5);controls.target.set(0,1,0);controls.update();}
     document.getElementById('studio3d-progress').style.width='0%';
     document.getElementById('studio3d-run-label').textContent='جاهز';
@@ -215,13 +215,13 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
     renderCustomActions();
   });
   function parseSeconds(text,fallback){
-    const m=text.match(/(\\d+(?:[.,]\\d+)?)\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)\/i);
+        const m=text.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);
     return m?Math.max(.25,Math.min(60,Number(m[1].replace(',','.')))):fallback;
   }
   function buildMotion() {
     const prompt=document.getElementById('studio3d-prompt').value.trim();
     duration=Math.max(1,Math.min(60,Number(document.getElementById('studio3d-duration').value)||3));
-    if(prompt && /\\d+(?:[.,]\\d+)?\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i.test(prompt)) duration=parseSeconds(prompt,duration);
+        if(prompt && /\d+(?:[.,]\d+)?\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i.test(prompt)) duration=parseSeconds(prompt,duration);
     let type=document.getElementById('studio3d-motion').value;
     let degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
     // Lightweight bilingual intent parsing. It is deterministic and never sends prompt text to a remote service.
