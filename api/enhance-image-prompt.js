@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     if (!upstream.ok) return res.status(upstream.status === 429 ? 429 : 502).json({error:upstream.status === 429 ? "وصلت لحد استخدام الذكاء الاصطناعي حاليًا؛ جرّب لاحقًا." : "فشل تحسين البرومبت: " + (data.error?.message || "خطأ من المزوّد")});
     const text = (data.candidates || []).flatMap(c=>c.content?.parts || []).map(p=>p.text || "").join("\n").trim();
     let parsed;
-    const cleaned = text.replace(/^\\s*```(?:json)?\\s*/i,"").replace(/\\s*```\\s*$/,"").trim();
+    const cleaned = text.replace(/^\s*```(?:json)?\s*/i,"").replace(/\s*```\s*$/,"").trim();
     try { parsed = JSON.parse(cleaned); }
     catch {
       const first = cleaned.indexOf("{"), last = cleaned.lastIndexOf("}");
