@@ -432,6 +432,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   });
   $('studio3d-add-demo').addEventListener('click',()=>{if(!renderer)initScene();const i=objects.length;addObject({name:'كرة ذهبية '+(i+1),shape:'sphere',color:'#f5c451',x:(i%4-1.5)*2,z:Math.floor(i/4)*2});status('تمت إضافة جسم تجريبي جديد.');});
   $('studio3d-save-motion').addEventListener('click',saveSelectedMotion);
+  $('studio3d-add-motion').addEventListener('click',addCompoundMotion);
   $('studio3d-clear-motion').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;item.motion={type:'rotate',duration:3,degrees:0,prompt:'بدون حركة',actions:[]};selectedActionIndex=0;$('studio3d-motion-degrees').value=0;updateSpec();loadSelected();status('تم مسح كل حركات الجسم.');});
   $('studio3d-duplicate').addEventListener('click',()=>{const item=objects.find(o=>o.id===selectedId);if(!item)return;const clone=item.root.clone(true);clone.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();if(o.material)o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();}});addObject({name:item.name+' نسخة',shape:item.shape,color:item.color,x:item.root.position.x+1.5,z:item.root.position.z+1.5,root:clone});});
   $('studio3d-delete').addEventListener('click',()=>removeObject(selectedId));
