@@ -215,13 +215,13 @@ import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/example
     renderCustomActions();
   });
   function parseSeconds(text,fallback){
-    const m=text.match(/(\\d+(?:[.,]\\d+)?)\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)\\b?/i);
+    const m=text.match(/(\\d+(?:[.,]\\d+)?)\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)\/i);
     return m?Math.max(.25,Math.min(60,Number(m[1].replace(',','.')))):fallback;
   }
   function buildMotion() {
     const prompt=document.getElementById('studio3d-prompt').value.trim();
     duration=Math.max(1,Math.min(60,Number(document.getElementById('studio3d-duration').value)||3));
-    if(prompt && !Number(document.getElementById('studio3d-duration').value)) duration=parseSeconds(prompt,3);
+    if(prompt && /\\d+(?:[.,]\\d+)?\\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i.test(prompt)) duration=parseSeconds(prompt,duration);
     let type=document.getElementById('studio3d-motion').value;
     let degrees=Math.max(-720,Math.min(720,Number(document.getElementById('studio3d-degrees').value)||180));
     // Lightweight bilingual intent parsing. It is deterministic and never sends prompt text to a remote service.
