@@ -107,6 +107,21 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
         place(mesh(new THREE.TorusGeometry(.42,.055,12,40),color),0,1.05,0);
         place(mesh(new THREE.CylinderGeometry(.35,.35,.06,40),color),0,.08,0);
       }
+    } else if(shape==='person'){
+      const skin= /أسمر|اسمر|بني البشرة|dark skin/.test(p)?'#8b5a3c':(/أبيض البشرة|فاتح البشرة|light skin/.test(p)?'#efc7a4':'#d6a078');
+      const shirt=inferClothingColor(p,color);
+      // Simple recognizable humanoid silhouette: head, torso, arms, legs, hands and shoes.
+      place(mesh(new THREE.SphereGeometry(.23,28,20),skin),0,2.22,0);
+      place(mesh(new THREE.CylinderGeometry(.12,.14,.09,24), /شعر أسود|شعر اسود|black hair/.test(p)?'#211b19':'#4a3027'),0,2.43,0);
+      place(mesh(new THREE.CapsuleGeometry(.28,.52,8,20),shirt),0,1.55,0);
+      place(mesh(new THREE.CylinderGeometry(.11,.1,.3,20),skin),0,1.98,0);
+      for(const side of [-1,1]){
+        const arm=place(mesh(new THREE.CapsuleGeometry(.085,.48,6,14),shirt),side*.36,1.56,0);arm.rotation.z=side*.18;
+        place(mesh(new THREE.SphereGeometry(.085,16,12),skin),side*.42,1.26,0);
+        const leg=place(mesh(new THREE.CapsuleGeometry(.105,.48,6,14), /بنطلون أسود|بنطلون اسود|black pants/.test(p)?'#25252b':'#344f7b'),side*.13,.65,0);leg.rotation.z=side*.025;
+        place(mesh(new THREE.BoxGeometry(.18,.1,.3),'#29272b'),side*.13,.12,.07);
+      }
+      if(/قبعة|كاب|hat|cap/.test(p))place(mesh(new THREE.CylinderGeometry(.25,.25,.08,24),inferColor(p,'#34343a')),0,2.48,0);
     } else if(shape==='car'){
       place(mesh(new THREE.BoxGeometry(2.2,.55,1.05),color,{metalness:.25}),0,.58,0);
       place(mesh(new THREE.BoxGeometry(1.15,.48,.88),'#9bd9ed',{metalness:.05,roughness:.18}),-.12,1.03,0);
@@ -157,6 +172,10 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   function inferShape(text,chosen){
     if(chosen&&chosen!=='auto')return chosen;
     const p=text.toLowerCase();
+    if(/شخص|إنسان|انسان|بني آدم|بنيادم|رجل|امرأة|ست|ولد|بنت|طفل|طفلة|human|person|man|woman|boy|girl|child|character|personage/.test(p))return 'person';
+    if(/كرة|كره|ball|sphere/.test(p))return 'sphere';
+    if(/شخص|إنسان|انسان|بني آدم|بنيادم|رجل|امرأة|ست|ولد|بنت|طفل|طفلة|human|person|man|woman|boy|girl|child|character/.test(p))return 'person';
+    if(/كرة|كره|ball|sphere/.test(p))return 'sphere';
     if(/سيارة|عربية|عربه|car|automobile|vehicle/.test(p))return 'car';
     if(/شجرة|شجره|tree|نخلة|نخله/.test(p))return 'tree';
     if(/بيت|منزل|house|home|كوخ|cabin/.test(p))return 'house';
@@ -172,6 +191,15 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     if(/حلقة|دونات|torus|ring|donut/.test(p))return 'torus';
     if(/كبسولة|capsule/.test(p))return 'capsule';
     return 'sphere';
+  }
+  function inferClothingColor(text,fallback){
+    const p=text.toLowerCase();
+    if(/قميص أحمر|تيشيرت أحمر|بلوزة حمراء|red shirt|red t-shirt/.test(p))return '#d83b3b';
+    if(/قميص أزرق|تيشيرت أزرق|blue shirt|blue t-shirt/.test(p))return '#3478c7';
+    if(/قميص أخضر|تيشيرت أخضر|green shirt|green t-shirt/.test(p))return '#31945d';
+    if(/قميص أبيض|تيشيرت أبيض|white shirt|white t-shirt/.test(p))return '#f4f0e8';
+    if(/قميص أسود|تيشيرت أسود|black shirt|black t-shirt/.test(p))return '#26262b';
+    return fallback;
   }
   function inferColor(text,fallback){
     const p=text.toLowerCase();
