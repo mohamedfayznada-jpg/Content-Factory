@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
@@ -11,6 +12,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   .studio3d-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:16px}
   .studio3d-stage{position:relative;height:490px;min-height:350px;border-radius:16px;overflow:hidden;background:#17151d;border:1px solid #49303a}
   .studio3d-stage canvas{display:block;width:100%;height:100%}
+  .studio3d-gizmo{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.studio3d-gizmo .btn.active{background:#881e3f;color:#fff;border-color:#881e3f}
   .studio3d-hud{position:absolute;top:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:2}
   .studio3d-hud span{background:#1a0f12dd;color:#f9e6d1;border:1px solid #f5c45144;padding:5px 8px;border-radius:20px;font-size:11px}
   .studio3d-timeline{height:8px;background:#eee4df;border-radius:8px;overflow:hidden;margin:12px 0}.studio3d-timeline>div{height:100%;width:0;background:linear-gradient(90deg,#881e3f,#f5c451)}
@@ -34,7 +36,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
    <section class="card"><div class="head"><h2>المشهد ثلاثي الأبعاد</h2><span class="pill">Three.js · WebGL</span></div>
     <div class="studio3d-stage" id="studio3d-stage"><div class="studio3d-hud"><span id="studio3d-count">0 أجسام</span><span id="studio3d-state">جاهز</span></div></div>
     <div class="studio3d-timeline"><div id="studio3d-progress"></div></div>
-    <div class="studio3d-actions"><button class="btn primary" id="studio3d-play">▶ تشغيل كل الحركات</button><button class="btn" id="studio3d-stop">إيقاف</button><button class="btn" id="studio3d-home">إظهار المشهد كاملًا</button></div>
+    <div class="studio3d-gizmo"><button class="btn active" id="studio3d-tool-move">↔ تحريك</button><button class="btn" id="studio3d-tool-rotate">⟳ تدوير</button><button class="btn" id="studio3d-tool-scale">⤢ تغيير الحجم</button><button class="btn" id="studio3d-tool-select">☝ سحب حر</button></div><p class="studio3d-note">اختَر الجسم ثم اسحب أسهم المحاور الملونة. في وضع «سحب حر» اسحب الجسم مباشرة على مستوى المشهد.</p><div class="studio3d-actions"><button class="btn primary" id="studio3d-play">▶ تشغيل كل الحركات</button><button class="btn" id="studio3d-stop">إيقاف</button><button class="btn" id="studio3d-home">إظهار المشهد كاملًا</button></div>
     <p class="studio3d-status" id="studio3d-status" role="status">حمّل المشهد أو أضف جسمًا من لوحة إنشاء الأجسام. اسحب بالماوس للدوران، واستخدم عجلة الماوس للتقريب.</p>
    </section>
    <section class="card"><div class="head"><h2>الأجسام داخل المشهد</h2><span class="pill" id="studio3d-selected-label">لا يوجد تحديد</span></div><div id="studio3d-objects" class="studio3d-object-list"></div>
@@ -68,7 +70,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   navButton.addEventListener('click',openPage);
   document.addEventListener('click',e=>{if(e.target.closest('[data-go="3d-studio"]'))openPage();});
 
-  let renderer,scene,camera,controls,raf=0,playing=false,startAt=0,duration=3,selectedId=null,objects=[],nextId=1;
+  let renderer,scene,camera,controls,transformControls,raycaster,mouse,raf=0,playing=false,startAt=0,duration=3,selectedId=null,objects=[],nextId=1,activeTool='translate',dragPlane,dragOffset,draggingObject=null,lastPointerX=0,lastPointerY=0;
   const clock=new THREE.Clock();
   const status=t=>{$('studio3d-status').textContent=t;};
   const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.32,metalness:.18});
@@ -80,14 +82,57 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
     $('studio3d-stage').appendChild(renderer.domElement);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.07;controls.target.set(0,1,0);controls.minDistance=2;controls.maxDistance=60;
+    transformControls=new TransformControls(camera,renderer.domElement);transformControls.setMode('translate');transformControls.setSpace('world');transformControls.setSize(1.05);scene.add(transformControls.getHelper());
+    transformControls.addEventListener('dragging-changed',e=>{controls.enabled=!e.value;if(e.value)playing=false;});
+    transformControls.addEventListener('objectChange',()=>{const item=objects.find(o=>o.id===selectedId);if(item){item.baseX=item.root.position.x;item.baseZ=item.root.position.z;updateSpec();}});
+    raycaster=new THREE.Raycaster();mouse=new THREE.Vector2();dragPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);dragOffset=new THREE.Vector3();
     scene.add(new THREE.HemisphereLight(0xffffff,0x353044,2.1));
     const key=new THREE.DirectionalLight(0xffe0b2,3.2);key.position.set(5,9,6);scene.add(key);
     const rim=new THREE.DirectionalLight(0x8c7bff,2);rim.position.set(-5,5,-6);scene.add(rim);
     const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#29252f',roughness:.82}));floor.rotation.x=-Math.PI/2;floor.position.y=-.035;scene.add(floor);
     const grid=new THREE.GridHelper(30,30,'#675765','#39333f');grid.position.y=-.02;scene.add(grid);
+    renderer.domElement.addEventListener('pointerdown',onScenePointerDown);renderer.domElement.addEventListener('pointermove',e=>{lastPointerX=e.clientX;lastPointerY=e.clientY;});renderer.domElement.addEventListener('pointerup',onScenePointerUp);renderer.domElement.addEventListener('dblclick',onSceneDoubleClick);
     resize();window.addEventListener('resize',resize);animate();
   }
   function resize(){if(!renderer)return;const el=$('studio3d-stage');const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
+  function setTool(mode){
+    activeTool=mode;
+    const map={move:'translate',rotate:'rotate',scale:'scale',select:'select'};
+    ['move','rotate','scale','select'].forEach(k=>$('studio3d-tool-'+k).classList.toggle('active',map[k]===mode));
+    if(transformControls){if(mode==='select'){transformControls.detach();transformControls.enabled=false;}else{transformControls.enabled=true;transformControls.setMode(mode);const item=objects.find(o=>o.id===selectedId);if(item)transformControls.attach(item.root);}}
+    status(mode==='select'?'اسحب الجسم مباشرة لتحريكه.':mode==='translate'?'اسحب أسهم المحاور لتحريك الجسم.':mode==='rotate'?'اسحب حلقات المحاور لتدوير الجسم.':'اسحب مقابض المحاور لتغيير الحجم.');
+  }
+  function pointerNdc(event){const r=renderer.domElement.getBoundingClientRect();mouse.x=((event.clientX-r.left)/r.width)*2-1;mouse.y=-((event.clientY-r.top)/r.height)*2+1;}
+  function pickObject(event){
+    pointerNdc(event);raycaster.setFromCamera(mouse,camera);
+    const meshes=[];objects.forEach(o=>o.root.traverse(n=>{if(n.isMesh)meshes.push(n);}));
+    const hit=raycaster.intersectObjects(meshes,false)[0];if(!hit)return null;
+    let n=hit.object;while(n&&!objects.some(o=>o.root===n))n=n.parent;
+    return objects.find(o=>o.root===n)||null;
+  }
+  function selectObject(item){
+    if(!item)return;selectedId=item.id;renderObjectList();loadSelected();focusObject(item);
+    if(transformControls&&activeTool!=='select'){transformControls.enabled=true;transformControls.attach(item.root);}
+    else if(transformControls)transformControls.detach();
+    updateSpec();
+  }
+  function onScenePointerDown(event){
+    if(event.button!==0||!renderer)return;
+    if(transformControls&&transformControls.axis)return;
+    const item=pickObject(event);if(!item)return;selectObject(item);
+    if(activeTool==='select'){
+      draggingObject=item;playing=false;
+      const normal=new THREE.Vector3();camera.getWorldDirection(normal);dragPlane.setFromNormalAndCoplanarPoint(normal,item.root.position);
+      const point=new THREE.Vector3();raycaster.ray.intersectPlane(dragPlane,point);dragOffset.copy(item.root.position).sub(point);
+      controls.enabled=false;renderer.domElement.setPointerCapture?.(event.pointerId);
+    }
+  }
+  function onScenePointerUp(event){
+    if(!draggingObject)return;
+    draggingObject.baseX=draggingObject.root.position.x;draggingObject.baseZ=draggingObject.root.position.z;
+    draggingObject=null;controls.enabled=true;try{renderer.domElement.releasePointerCapture?.(event.pointerId);}catch{}updateSpec();
+  }
+  function onSceneDoubleClick(event){const item=pickObject(event);if(item)selectObject(item);}
   function createGeometry(shape,color,description=''){
     const group=new THREE.Group();
     const p=description.toLowerCase();
@@ -216,7 +261,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     const id=nextId++,objectRoot=root||createGeometry(shape,color,description||name||'');
     objectRoot.position.set(x,0,z);objectRoot.userData.objectId=id;scene.add(objectRoot);
     const item={id,name:name||('جسم '+id),shape,color,root:objectRoot,motion:{type:'rotate',duration:3,degrees:180,prompt:'لف الجسم 180 درجة خلال 3 ثوانٍ'}};
-    objects.push(item);selectedId=id;renderObjectList();loadSelected();updateSpec();focusObject(item);return item;
+    objects.push(item);selectedId=id;renderObjectList();loadSelected();updateSpec();focusObject(item);if(transformControls&&activeTool!=='select')transformControls.attach(item.root);return item;
   }
   function focusObject(item){if(!item||!camera)return;controls.target.set(item.root.position.x,1,item.root.position.z);controls.update();}
   function dispose(root){root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)for(const m of(Array.isArray(o.material)?o.material:[o.material]))m.dispose();});}
@@ -230,7 +275,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     });
     $('studio3d-count').textContent=objects.length+' أجسام';const item=objects.find(o=>o.id===selectedId);$('studio3d-selected-label').textContent=item?item.name:'لا يوجد تحديد';
   }
-  function removeObject(id){const item=objects.find(o=>o.id===id);if(!item)return;scene.remove(item.root);dispose(item.root);objects=objects.filter(o=>o.id!==id);selectedId=objects[0]?.id??null;renderObjectList();loadSelected();updateSpec();}
+  function removeObject(id){const item=objects.find(o=>o.id===id);if(!item)return;if(transformControls&&selectedId===id)transformControls.detach();scene.remove(item.root);dispose(item.root);objects=objects.filter(o=>o.id!==id);selectedId=objects[0]?.id??null;renderObjectList();loadSelected();updateSpec();}
   function loadSelected(){
     const item=objects.find(o=>o.id===selectedId),enabled=!!item;
     ['studio3d-motion-prompt','studio3d-motion-type','studio3d-motion-duration','studio3d-motion-degrees','studio3d-save-motion','studio3d-clear-motion','studio3d-duplicate','studio3d-delete'].forEach(id=>$(id).disabled=!enabled);
@@ -266,6 +311,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
   }
   function animate(){
     raf=requestAnimationFrame(animate);
+    if(draggingObject&&renderer&&raycaster){pointerNdc({clientX:lastPointerX,clientY:lastPointerY});raycaster.setFromCamera(mouse,camera);const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(dragPlane,p)){draggingObject.root.position.x=p.x+dragOffset.x;draggingObject.root.position.z=p.z+dragOffset.z;draggingObject.baseX=draggingObject.root.position.x;draggingObject.baseZ=draggingObject.root.position.z;}}
     if(playing){
       const elapsed=(performance.now()-startAt)/1000;applySceneTime(elapsed);
       $('studio3d-progress').style.width=(Math.min(1,elapsed/duration)*100)+'%';$('studio3d-state').textContent=elapsed.toFixed(1)+' / '+duration+'s';
@@ -277,6 +323,10 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     const spec={schema_version:'1.1',engine:'three.js',scene:{object_count:objects.length,objects:objects.map(o=>({id:o.id,name:o.name,shape:o.shape,color:o.color,position:{x:Number(o.root.position.x.toFixed(3)),y:Number(o.root.position.y.toFixed(3)),z:Number(o.root.position.z.toFixed(3))},motion:o.motion}))}};
     $('studio3d-spec').textContent=JSON.stringify(spec,null,2);
   }
+  $('studio3d-tool-move').addEventListener('click',()=>setTool('translate'));
+  $('studio3d-tool-rotate').addEventListener('click',()=>setTool('rotate'));
+  $('studio3d-tool-scale').addEventListener('click',()=>setTool('scale'));
+  $('studio3d-tool-select').addEventListener('click',()=>setTool('select'));
   $('studio3d-create').addEventListener('click',()=>{
     if(!renderer)initScene();const prompt=$('studio3d-object-prompt').value.trim()||'جسم جديد',shape=inferShape(prompt,$('studio3d-shape').value),manualColor=$('studio3d-color').value,color=manualColor==='#48b9d0'?inferColor(prompt,manualColor):manualColor;
     const startCount=objects.length;
