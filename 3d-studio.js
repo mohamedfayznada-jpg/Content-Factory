@@ -60,7 +60,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     <div class="studio3d-field"><label for="studio3d-motion-type">نوع الحركة</label><select id="studio3d-motion-type"><option value="rotate">دوران الجسم</option><option value="float">طفو لأعلى وأسفل</option><option value="orbit">دوران في مسار دائري</option><option value="move">تحرك من مكانه</option><option value="pulse">تكبير وتصغير</option></select></div>
     <div class="studio3d-field"><label for="studio3d-motion-duration">المدة بالثواني</label><input id="studio3d-motion-duration" type="number" min="0.5" max="60" step="0.5" value="3"></div>
     <div class="studio3d-field"><label for="studio3d-motion-degrees">زاوية الدوران (درجة)</label><input id="studio3d-motion-degrees" type="number" min="-1440" max="1440" step="15" value="180"></div>
-    <div class="studio3d-actions"><button class="btn primary" id="studio3d-save-motion">حفظ / تحديث الحركة المحددة</button><button class="btn" id="studio3d-add-motion">＋ إضافة حركة مركبة</button></div><div class="studio3d-actions"><button class="btn" id="studio3d-clear-motion">مسح كل الحركات</button></div><h3>Timeline الحركات</h3><div class="studio3d-timeline-list" id="studio3d-motion-timeline"></div><div class="studio3d-note" id="studio3d-motion-status">اختَر حركة أو أضف حركة جديدة.</div>
+    <div class="studio3d-actions"><button class="btn primary" id="studio3d-add-motion">＋ إضافة للحركة المتسلسلة</button><button class="btn" id="studio3d-save-motion">تحديث الحركة المحددة</button></div><p class="studio3d-note">لإنشاء حركة ثانية أو ثالثة اضغط «إضافة للحركة المتسلسلة». زر التحديث يغيّر الحركة المختارة فقط.</p><div class="studio3d-actions"><button class="btn" id="studio3d-clear-motion">مسح كل الحركات</button></div><h3>Timeline الحركات</h3><div class="studio3d-timeline-list" id="studio3d-motion-timeline"></div><div class="studio3d-note" id="studio3d-motion-status">اختَر حركة أو أضف حركة جديدة.</div>
    </section>
    <section class="card"><div class="head"><h2>ملخص المشهد</h2></div><pre class="studio3d-spec" id="studio3d-spec">أضف جسمًا لإنشاء مخطط المشهد.</pre></section>
   </div></div>`;
@@ -299,15 +299,25 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     $('studio3d-motion-degrees').value=action.degrees??180;
   }
   function readActionForm(){
-    const prompt=$('studio3d-motion-prompt').value.trim();
+    const prompt=$('studio3d-motion-prompt').value.trim(),p=prompt.toLowerCase();
     let type=$('studio3d-motion-type').value;
     let duration=Math.max(.5,Math.min(60,Number($('studio3d-motion-duration').value)||3));
     let degrees=Math.max(-1440,Math.min(1440,Number($('studio3d-motion-degrees').value)||0));
-    const tm=prompt.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);
+    const tm=p.match(/(\d+(?:[.,]\d+)?)\s*(?:ثانية|ثواني|ثانيه|second|seconds|sec)/i);
     if(tm)duration=Math.max(.5,Math.min(60,Number(tm[1].replace(',','.'))));
-    const dm=prompt.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);
+    const dm=p.match(/(-?\d{1,4})\s*(?:درجة|درجات|degrees?)/i);
     if(dm)degrees=Math.max(-1440,Math.min(1440,Number(dm[1])));
-    return {type,duration,degrees,prompt:prompt||type,start:0,end:duration};
+    // Prefer an explicit action described in the prompt over a stale dropdown choice.
+    if(/طفو|يطفو|يرتفع|ينخفض|فوق وتحت|لأعلى وأسفل|float|hover|up and down/.test(p))type='float';
+    else if(/مدار|مسار دائري|دائرة|orbit|circle/.test(p))type='orbit';
+    else if(/نبض|تكبير وتصغير|يكبر ويصغر|pulse|scale|zoom in and out/.test(p))type='pulse';
+    else if(/لف|دوران|يدور|استدر|rotate|spin|turn/.test(p))type='rotate';
+    else if(/تحرك|يتحرك|انتقل|للأمام|الى الأمام|إلى الأمام|قدام|للخلف|يمين|يسار|يمين وشمال|move|slide|forward|backward|left|right/.test(p))type='move';
+    const axis=/يمين وشمال|يمين ويسار|right and left|left and right|sway/.test(p)?'x':(/للأمام|الى الأمام|إلى الأمام|قدام|للخلف|forward|backward/.test(p)?'z':'x');
+    const direction= /للخلف|backward/.test(p)?-1:1;
+    const distanceMatch=p.match(/(\d+(?:[.,]\d+)?)\s*(?:متر|مترات|unit|units)/i);
+    const distance=distanceMatch?Math.max(.1,Math.min(20,Number(distanceMatch[1].replace(',','.')))):2;
+    return {type,duration,degrees,prompt:prompt||type,start:0,end:duration,axis,direction,distance};
   }
   function normalizeActionSequence(item){
     const actions=item.motion.actions||[];
@@ -372,16 +382,21 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
     for(const item of objects){
       const root=item.root,actions=item.motion?.actions||[];
       const baseX=item.baseX??item.homeX??root.position.x,baseY=item.baseY??item.homeY??root.position.y,baseZ=item.baseZ??item.homeZ??root.position.z;
-      root.rotation.set(0,0,0);root.position.set(baseX,baseY,baseZ);root.scale.setScalar(1);
+      let x=baseX,y=baseY,z=baseZ,rotY=0,scale=1;
       for(const action of actions){
-        const start=Math.max(0,Number(action.start)||0),dur=Math.max(.1,Number(action.duration)||3),t=Math.max(0,Math.min(1,(seconds-start)/dur)),ease=t*t*(3-2*t);
+        const start=Math.max(0,Number(action.start)||0),dur=Math.max(.1,Number(action.duration)||3),raw=Math.max(0,Math.min(1,(seconds-start)/dur)),ease=raw*raw*(3-2*raw);
         if(seconds<start)continue;
-        if(action.type==='rotate')root.rotation.y=(Number(action.degrees)||0)*Math.PI/180*ease;
-        else if(action.type==='float')root.position.y=baseY+(seconds>=start+dur?0:Math.sin(t*Math.PI*2)*.35);
-        else if(action.type==='orbit'){const angle=ease*Math.PI*2;root.position.x=baseX+Math.cos(angle)*1.2;root.position.z=baseZ+Math.sin(angle)*1.2;root.rotation.y=angle;}
-        else if(action.type==='move')root.position.x=baseX+Math.sin(ease*Math.PI)*2;
-        else if(action.type==='pulse')root.scale.setScalar(1+.25*Math.sin(t*Math.PI*4));
+        const complete=seconds>=start+dur;
+        if(action.type==='rotate')rotY+=(Number(action.degrees)||0)*Math.PI/180*ease;
+        else if(action.type==='float')y+=complete?0:Math.sin(raw*Math.PI*2)*.35;
+        else if(action.type==='orbit'){const angle=ease*Math.PI*2; x+=(Number(action.direction)||1)*Math.cos(angle)*1.2;z+=Math.sin(angle)*1.2;rotY+=angle;}
+        else if(action.type==='move'){
+          const distance=Number(action.distance)||2,dir=Number(action.direction)||1,axis=action.axis||'x';
+          const delta=complete?distance:distance*Math.sin(ease*Math.PI/2);
+          if(axis==='z')z+=dir*delta;else x+=dir*delta;
+        } else if(action.type==='pulse')scale*=1+.25*Math.sin(raw*Math.PI*4);
       }
+      root.position.set(x,y,z);root.rotation.set(0,rotY,0);root.scale.setScalar(scale);
     }
   }
   function animate(){
